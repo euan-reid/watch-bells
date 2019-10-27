@@ -1,10 +1,11 @@
 import pystray
+
 from PIL import Image, ImageDraw
 
-icon = pystray.Icon('Watch Bells')
+icon = pystray.Icon(name='Watch Bells', title='Watch Bells')
 
 def quit_program():
-    exit(0)
+    icon.stop()
 
 def create_image(width, height):
     image = Image.new('RGB', (width, height), 'blue')
