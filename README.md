@@ -21,6 +21,8 @@ You will need pipenv and Python 3.7 installed
 
 ## Release History
 
+* 0.3.0
+	* Bundle sound files, allowing offline usage and avoiding load on freesound.org
 * 0.2.0
 	* Add mute toggle and hover text for current time
 * 0.1.1

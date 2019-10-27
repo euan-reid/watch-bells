@@ -1,14 +1,16 @@
 import datetime
 import time
 
+from pathlib import Path
+
 import pystray
 
 from PIL import Image, ImageDraw
 from playsound import playsound
 
-# TODO: Bundle MP3s locally
-TWO_CHIMES = 'https://freesound.org/data/previews/353/353232_5477651-lq.mp3'
-ONE_CHIME = 'https://freesound.org/data/previews/353/353233_5477651-lq.mp3'
+SCRIPT_PATH = Path(__file__).absolute().parent
+ONE_CHIME = str(SCRIPT_PATH / 'chime_once.wav')
+TWO_CHIMES = str(SCRIPT_PATH / 'chime_twice.wav')
 
 WATCH_TIMES = {
     'first': range(2000, 2400),
