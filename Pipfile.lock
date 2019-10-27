@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "c45d7c778118130c721baecc064a69659966c2a07247943a3b2cbb917426c540"
+            "sha256": "6e7192978079ca8e75e1b207eb64662759b5004a349b32d292bf0a7cf3e105c0"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -53,7 +53,8 @@
         },
         "pystray": {
             "hashes": [
-                "sha256:2d200e3bf2e265d6f95fb210fde65b5719bb1e723b6f2315206af22ddf9adff2"
+                "sha256:2d200e3bf2e265d6f95fb210fde65b5719bb1e723b6f2315206af22ddf9adff2",
+                "sha256:9d4862015fa1965aa40e583d99e3269923924c74e84660a6547098df04d119eb"
             ],
             "index": "pypi",
             "version": "==0.14.4"
@@ -88,6 +89,13 @@
             ],
             "version": "==19.3.0"
         },
+        "autopep8": {
+            "hashes": [
+                "sha256:4d8eec30cc81bc5617dbf1218201d770dc35629363547f17577c61683ccfb3ee"
+            ],
+            "index": "pypi",
+            "version": "==1.4.4"
+        },
         "bandit": {
             "hashes": [
                 "sha256:336620e220cf2d3115877685e264477ff9d9abaeb0afe3dc7264f55fa17a3952",
@@ -101,7 +109,7 @@
                 "sha256:05eed71e2e327246ad6b38c540c4a3117230b19679b875190486ddd2d721422d",
                 "sha256:f8ac84de7840f5b9c4e3347b3c1eaa50f7e49c2b07596221daec5edaabbd7c48"
             ],
-            "markers": "platform_system == 'Windows'",
+            "markers": "sys_platform == 'win32'",
             "version": "==0.4.1"
         },
         "coverage": {
