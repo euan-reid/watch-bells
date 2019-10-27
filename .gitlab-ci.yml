@@ -1,0 +1,33 @@
+image: python:latest
+
+stages:
+  - test
+  - build
+
+before_script:
+  - python -V               # Print out python version for debugging
+  - pip install --no-cache-dir --trusted-host pypi.python.org pipenv
+  - pipenv install --system --dev --ignore-pipfile
+
+lint check:
+  stage: test
+  script:
+    - flake8
+
+security check:
+  stage: test
+  script:
+    - bandit -r .
+
+test:
+  stage: test
+  script:
+    - pytest -v --cov=watch_bells --cov-report=term --cov-branch ./test_watch_bells.py
+
+build:
+  stage: build
+  script:
+  - pyinstaller --onefile watch_bells.py
+  artifacts:
+    paths:
+    - dist/watch_bells
