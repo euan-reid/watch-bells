@@ -21,8 +21,8 @@ You will need pipenv and Python 3.7 installed
 
 ## Release History
 
-* 0.0.1
-	* Initial commit
+* 0.1.0
+	* Initial release
 
 ## Acknowledgements
 
