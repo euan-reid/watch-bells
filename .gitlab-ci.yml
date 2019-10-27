@@ -17,7 +17,7 @@ lint check:
 security check:
   stage: test
   script:
-    - bandit -r .
+    - bandit -r . -x test_watch_bells.py
 
 test:
   stage: test
