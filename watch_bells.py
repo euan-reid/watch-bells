@@ -18,8 +18,9 @@ icon = pystray.Icon(name='Watch Bells', title='Watch Bells')
 def watch_clock(icon):
     icon.visible = True
     while running:
+        next_bell = next_half_hour()
         seconds_to_wait = (
-            (next_half_hour() - datetime.datetime.now())
+            (next_bell - datetime.datetime.now())
             .total_seconds()
         )
         # Waiting 10 seconds at most means a maximum of 10 seconds
@@ -28,7 +29,7 @@ def watch_clock(icon):
             time.sleep(10)
         else:
             time.sleep(seconds_to_wait)
-            ring_bells_for_timestamp(next_half_hour())
+            ring_bells_for_timestamp(next_bell)
 
 
 def next_half_hour():
