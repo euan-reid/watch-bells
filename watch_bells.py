@@ -14,6 +14,7 @@ running = True
 
 icon = pystray.Icon(name='Watch Bells', title='Watch Bells')
 
+
 def watch_clock(icon):
     icon.visible = True
     while running:
@@ -29,6 +30,7 @@ def watch_clock(icon):
             time.sleep(seconds_to_wait)
             ring_bells_for_timestamp(next_half_hour)
 
+
 def next_half_hour():
     # Be deliberately timezone-naive and just read computer clock
     dt = datetime.datetime().now()
@@ -38,6 +40,7 @@ def next_half_hour():
     else:
         dt = dt.replace(minute=0) + datetime.timedelta(hours=1)
     return dt
+
 
 def ring_bells_for_timestamp(dt):
     bells = dt.hour % 4 * 2
@@ -54,6 +57,7 @@ def ring_bells_for_timestamp(dt):
         bells = 8
     ring_bells(bells)
 
+
 def ring_bells(bells):
     pairs = bells // 2
     single = bells % 2
@@ -64,10 +68,12 @@ def ring_bells(bells):
     if single:
         playsound(ONE_CHIME)
 
+
 def quit_program():
     global running
     running = False
     icon.stop()
+
 
 def create_image(width, height):
     image = Image.new('RGB', (width, height), 'blue')
@@ -81,6 +87,7 @@ def create_image(width, height):
 
     return image
 
+
 def create_menu():
     return pystray.Menu(
         pystray.MenuItem(
@@ -88,6 +95,7 @@ def create_menu():
             action=quit_program
         )
     )
+
 
 icon.icon = create_image(100, 100)
 icon.menu = create_menu()
