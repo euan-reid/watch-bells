@@ -21,6 +21,8 @@ You will need pipenv and Python 3.7 installed
 
 ## Release History
 
+* 0.2.0
+	* Add mute toggle and hover text for current time
 * 0.1.1
 	* Correct off-by-one error in bell count
 * 0.1.0
