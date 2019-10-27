@@ -24,6 +24,10 @@ You will need pipenv and Python 3.7 installed
 * 0.0.1
 	* Initial commit
 
+## Acknowledgements
+
+The ship's bell chimes are public domain and come from Sojan on freesound.org - thank you to them
+
 ## Maintainers
 
 Euan Reid – [@EuanReid](https://twitter.com/EuanReid)
