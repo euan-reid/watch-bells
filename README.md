@@ -21,6 +21,8 @@ You will need pipenv and Python 3.7 installed
 
 ## Release History
 
+* 0.4.1
+	* Fix for Nore adjustments
 * 0.4.0
 	* Bell icon
 	* Fix for dog watch name display (correctly show spaces instead of underscores, e.g. first dog vs first_dog)

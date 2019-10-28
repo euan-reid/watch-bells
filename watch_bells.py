@@ -16,13 +16,13 @@ ONE_CHIME = str(SCRIPT_PATH / 'chime_once.wav')
 TWO_CHIMES = str(SCRIPT_PATH / 'chime_twice.wav')
 
 WATCH_TIMES = {
-    'first': range(2000, 2400),
-    'middle': range(0000, 400),
-    'morning': range(400, 800),
-    'forenoon': range(800, 1200),
-    'afternoon': range(1200, 1600),
-    'first dog': range(1600, 1800),
-    'last dog': range(1800, 2000)
+    'first': range(2001, 2400),
+    'middle': range(1, 400),
+    'morning': range(401, 800),
+    'forenoon': range(801, 1200),
+    'afternoon': range(1201, 1600),
+    'first dog': range(1601, 1800),
+    'last dog': range(1801, 2000)
 }
 
 INT_TO_WORDS = {
