@@ -21,6 +21,9 @@ You will need pipenv and Python 3.7 installed
 
 ## Release History
 
+* 0.4.0
+	* Bell icon
+	* Fix for dog watch name display (correctly show spaces instead of underscores, e.g. first dog vs first_dog)
 * 0.3.0
 	* Bundle sound files, allowing offline usage and avoiding load on freesound.org
 * 0.2.0
