@@ -17,12 +17,12 @@ TWO_CHIMES = str(SCRIPT_PATH / 'chime_twice.wav')
 
 WATCH_TIMES = {
     'first': range(2001, 2400),
-    'middle': range(1, 400),
-    'morning': range(401, 800),
-    'forenoon': range(801, 1200),
-    'afternoon': range(1201, 1600),
-    'first dog': range(1601, 1800),
-    'last dog': range(1801, 2000)
+    'middle': range(1, 401),
+    'morning': range(401, 801),
+    'forenoon': range(801, 1201),
+    'afternoon': range(1201, 1601),
+    'first dog': range(1601, 1801),
+    'last dog': range(1801, 2001)
 }
 
 INT_TO_WORDS = {
@@ -103,10 +103,22 @@ def next_half_hour():
     return dt
 
 
+def last_half_hour():
+    dt = datetime.datetime.now()
+    dt = dt.replace(second=0, microsecond=0)
+    if dt.minute > 30:
+        dt = dt.replace(minute=30)
+    else:
+        dt = dt.replace(minute=0)
+    return dt
+
+
 def watch_for_datetime(dt):
     timestamp = int(f'{dt.hour}{dt.minute:02d}')
     if timestamp not in range(0, 2400):
         raise ValueError(f'Invalid timestamp {timestamp}')
+    if 0 == timestamp:
+        return 'first'
     for watch, timerange in WATCH_TIMES.items():
         if timestamp in timerange:
             return watch
@@ -135,7 +147,7 @@ def ring_bells(bells):
 
 
 if '__main__' == __name__:
-    dt = datetime.datetime.now()
+    dt = last_half_hour()
     watch = watch_for_datetime(dt)
     bells = bells_for_datetime(dt)
     icon.title = f'{INT_TO_WORDS[bells]} of the {watch} watch'
