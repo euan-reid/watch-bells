@@ -5,10 +5,13 @@ from pathlib import Path
 
 import pystray
 
-from PIL import Image, ImageDraw
+from PIL import Image
 from playsound import playsound
 
 SCRIPT_PATH = Path(__file__).absolute().parent
+
+ICON_FILE = SCRIPT_PATH / 'icon.png'
+
 ONE_CHIME = str(SCRIPT_PATH / 'chime_once.wav')
 TWO_CHIMES = str(SCRIPT_PATH / 'chime_twice.wav')
 
@@ -37,6 +40,35 @@ muted = False
 shutting_down = False
 
 icon = pystray.Icon(name='Watch Bells')
+icon.icon = Image.open(ICON_FILE)
+
+
+def create_menu():
+    return pystray.Menu(
+        pystray.MenuItem(
+            text='Mute',
+            action=toggle_mute,
+            checked=lambda item: muted
+        ),
+        pystray.MenuItem(
+            text='Quit',
+            action=quit_program
+        )
+    )
+
+
+def toggle_mute():
+    global muted
+    muted = not muted
+
+
+def quit_program():
+    global shutting_down
+    shutting_down = True
+    icon.stop()
+
+
+icon.menu = create_menu()
 
 
 def watch_clock(icon):
@@ -101,47 +133,6 @@ def ring_bells(bells):
     if single:
         playsound(ONE_CHIME)
 
-
-def toggle_mute():
-    global muted
-    muted = not muted
-
-
-def quit_program():
-    global shutting_down
-    shutting_down = True
-    icon.stop()
-
-
-def create_image(width, height):
-    image = Image.new('RGB', (width, height), 'blue')
-    dc = ImageDraw.Draw(image)
-    dc.rectangle(
-        (width // 2, 0, width, height // 2),
-        fill='gold')
-    dc.rectangle(
-        (0, height // 2, width // 2, height),
-        fill='gold')
-
-    return image
-
-
-def create_menu():
-    return pystray.Menu(
-        pystray.MenuItem(
-            text='Mute',
-            action=toggle_mute,
-            checked=lambda item: muted
-        ),
-        pystray.MenuItem(
-            text='Quit',
-            action=quit_program
-        )
-    )
-
-
-icon.icon = create_image(100, 100)
-icon.menu = create_menu()
 
 if '__main__' == __name__:
     dt = datetime.datetime.now()
