@@ -21,8 +21,8 @@ WATCH_TIMES = {
     'morning': range(400, 800),
     'forenoon': range(800, 1200),
     'afternoon': range(1200, 1600),
-    'first_dog': range(1600, 1800),
-    'last_dog': range(1800, 2000)
+    'first dog': range(1600, 1800),
+    'last dog': range(1800, 2000)
 }
 
 INT_TO_WORDS = {
@@ -118,7 +118,7 @@ def bells_for_datetime(dt):
         bells += 1
     if bells == 0:
         bells = 8
-    if watch_for_datetime(dt) == 'last_dog' and bells != 8:
+    if watch_for_datetime(dt) == 'last dog' and bells != 8:
         bells -= 4
     return bells
 
