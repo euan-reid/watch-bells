@@ -1,4 +1,10 @@
-image: python:3.7
+.shared_windows_runners:
+  tags:
+  - shared-windows
+  - windows
+  - windows-1809
+
+image: python:3
 
 stages:
   - test
@@ -25,6 +31,16 @@ test:
     - pytest -v --cov=watch_bells --cov-report=term --cov-branch ./test_watch_bells.py
 
 build:
+  stage: build
+  script:
+  - pyinstaller --onefile watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
+  artifacts:
+    paths:
+    - dist/watch_bells
+
+build windows:
+  extends:
+  - .shared_windows_runners
   stage: build
   script:
   - pyinstaller --onefile watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
