@@ -13,11 +13,9 @@ Download the latest release binary, put it somewhere that gets automatically sta
 
 ## Development setup
 
-You will need pipenv and Python 3.7 installed
+You will need VS Code, Git, and Docker installed; and VS Code Remote - Containers set up.
 
-1. Clone the repo
-2. `pipenv sync --dev`
-3. `pipenv run python watch_bells.py`
+With that setup in place, use Remote Containers: Clone Repository in Container Volume and clone the repo. Everything else should be automatic.
 
 ## Release History
 
