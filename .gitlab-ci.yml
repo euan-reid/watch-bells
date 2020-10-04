@@ -27,7 +27,7 @@ test:
 build:
   stage: build
   script:
-  - pyinstaller --onefile watch_bells.py
+  - pyinstaller --onefile watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
   artifacts:
     paths:
     - dist/watch_bells
