@@ -9,7 +9,7 @@
 			// Update 'VARIANT' to pick a Python version: 3, 3.6, 3.7, 3.8 
 			"VARIANT": "3",
 			// Options
-			"INSTALL_NODE": "true",
+			"INSTALL_NODE": "false",
 			"NODE_VERSION": "lts/*"
 		}
 	},
