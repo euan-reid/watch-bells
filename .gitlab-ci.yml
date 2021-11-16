@@ -40,6 +40,13 @@ build:
 build windows:
   extends:
   - .shared_windows_runners
+  before_script:
+    # https://gitlab.com/gitlab-org/ci-cd/shared-runners/images/gcp/windows-containers/-/issues/13
+    - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+    - choco install python3 --yes --force --no-progress
+    - refreshenv
+    - python -V
+    - pip install --no-cache-dir --trusted-host pypi.python.org -r requirements-dev.txt
   stage: build
   script:
   - pyinstaller --onefile --add-data="assets/icon.png:assets" --add-data="assets/chime_once.wav:assets" --add-binary="assets/chime_twice.wav:assets" src/watch_bells.py
