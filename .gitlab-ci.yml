@@ -32,7 +32,7 @@ test:
 build:
   stage: build
   script:
-  - pyinstaller --onefile src/watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
+  - pyinstaller --onefile --add-data="assets/icon.png:assets" --add-data="asets/chime_once.wav:assets" --add-binary="assets/chime_twice.wav:assets" src/watch_bells.py
   artifacts:
     paths:
     - dist/watch_bells
@@ -42,7 +42,7 @@ build windows:
   - .shared_windows_runners
   stage: build
   script:
-  - pyinstaller --onefile src/watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
+  - pyinstaller --onefile --add-data="assets/icon.png:assets" --add-data="asets/chime_once.wav:assets" --add-binary="assets/chime_twice.wav:assets" src/watch_bells.py
   artifacts:
     paths:
     - dist/watch_bells

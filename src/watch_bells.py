@@ -8,9 +8,11 @@ import pystray
 from PIL import Image
 from playsound import playsound
 
-SCRIPT_PATH = Path(__file__).absolute().parent
+SCRIPT_PATH = Path(__file__).resolve().parent
+ROOT_PATH = SCRIPT_PATH.parent
+ASSET_PATH = ROOT_PATH / 'assets'
 
-ICON_FILE = SCRIPT_PATH / 'icon.png'
+ICON_FILE = ASSET_PATH / 'icon.png'
 
 ONE_CHIME = str(SCRIPT_PATH / 'chime_once.wav')
 TWO_CHIMES = str(SCRIPT_PATH / 'chime_twice.wav')
