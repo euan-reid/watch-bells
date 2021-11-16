@@ -1,0 +1,10 @@
+autopep8
+bandit
+flake8
+isort
+pyinstaller
+pytest
+pytest-cov
+
+# Dev requirements first in case something fails
+-r requirements.txt

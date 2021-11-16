@@ -12,28 +12,27 @@ stages:
 
 before_script:
   - python -V               # Print out python version for debugging
-  - pip install --no-cache-dir --trusted-host pypi.python.org pipenv
-  - pipenv install --system --dev --ignore-pipfile
+  - pip install --no-cache-dir --trusted-host pypi.python.org -r requirements-dev.txt
 
 lint check:
   stage: test
   script:
-    - flake8
+    - flake8 ./src
 
 security check:
   stage: test
   script:
-    - bandit -r . -x test_watch_bells.py
+    - bandit -r src
 
 test:
   stage: test
   script:
-    - pytest -v --cov=watch_bells --cov-report=term --cov-branch ./test_watch_bells.py
+    - pytest -v --cov=watch_bells --cov-report=term --cov-branch ./test/test_watch_bells.py
 
 build:
   stage: build
   script:
-  - pyinstaller --onefile watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
+  - pyinstaller --onefile src/watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
   artifacts:
     paths:
     - dist/watch_bells
@@ -43,7 +42,7 @@ build windows:
   - .shared_windows_runners
   stage: build
   script:
-  - pyinstaller --onefile watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
+  - pyinstaller --onefile src/watch_bells.py --add-binary icon.png:icon.png --add-binary chime_once.wav:chime_once.wav --add-binary chime_twice.wav:chime_twice.wav
   artifacts:
     paths:
     - dist/watch_bells
