@@ -1,0 +1,225 @@
+:root {
+  --ink: #10222c;
+  --ink-soft: #2f4d5a;
+  --paper: #f6f7f2;
+  --card: rgba(255, 255, 255, 0.75);
+  --line: rgba(16, 34, 44, 0.14);
+  --accent: #0f766e;
+  --accent-strong: #115e59;
+  --shadow: 0 20px 45px rgba(22, 58, 74, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #dce8e4;
+    --ink-soft: #8aacaa;
+    --paper: #0e1a1f;
+    --card: rgba(255, 255, 255, 0.06);
+    --line: rgba(220, 232, 228, 0.12);
+    --accent: #2dd4bf;
+    --accent-strong: #5eead4;
+    --shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: "Work Sans", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% 0%, #dcece7 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 90%, #e9d8bf 0%, transparent 62%),
+    linear-gradient(155deg, #f2f6f4 0%, #eef0ea 55%, #ece8de 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background:
+      radial-gradient(1200px 600px at 10% 0%, rgba(17, 94, 89, 0.18) 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 90%, rgba(100, 60, 20, 0.14) 0%, transparent 62%),
+      linear-gradient(155deg, #0e1a1f 0%, #0f1e22 55%, #131a18 100%);
+  }
+}
+
+.bg-shape {
+  position: fixed;
+  z-index: -1;
+  border-radius: 999px;
+  filter: blur(1px);
+}
+
+.bg-shape-a {
+  width: 26rem;
+  height: 26rem;
+  top: -10rem;
+  right: -9rem;
+  background: rgba(17, 94, 89, 0.12);
+  transform: rotate(-8deg);
+}
+
+.bg-shape-b {
+  width: 20rem;
+  height: 20rem;
+  left: -8rem;
+  bottom: -6rem;
+  background: rgba(180, 118, 38, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bg-shape-a {
+    background: rgba(45, 212, 191, 0.08);
+  }
+
+  .bg-shape-b {
+    background: rgba(180, 118, 38, 0.08);
+  }
+}
+
+.shell {
+  width: min(72rem, 100% - 2.25rem);
+  margin: 0 auto;
+  padding: 4.5rem 0 3rem;
+}
+
+.hero h1 {
+  margin: 0.25rem 0 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: clamp(2.2rem, 4vw, 4.5rem);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+.kicker {
+  margin: 0;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 700;
+  font-size: 0.77rem;
+}
+
+.lead {
+  margin: 1rem 0 0;
+  max-width: 44ch;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  font-size: clamp(1rem, 1.5vw, 1.22rem);
+}
+
+.cta-row {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.72rem 1.05rem;
+  border-radius: 0.7rem;
+  text-decoration: none;
+  font-weight: 700;
+  border: 1px solid transparent;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.btn:hover,
+.btn:focus-visible {
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.28);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background: var(--accent-strong);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-primary {
+    color: #0e1a1f;
+    box-shadow: 0 10px 24px rgba(45, 212, 191, 0.22);
+  }
+}
+
+.btn-secondary {
+  border-color: var(--line);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+.cards {
+  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(6px);
+}
+
+.card h2 {
+  margin: 0;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.2rem;
+}
+
+.card p {
+  margin: 0.55rem 0 0;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.links {
+  margin-top: 1.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+
+.links a {
+  color: var(--ink);
+  text-underline-offset: 0.2em;
+  font-weight: 500;
+}
+
+@media (max-width: 820px) {
+  .shell {
+    width: min(66rem, 100% - 1.35rem);
+    padding-top: 3rem;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .lead {
+    max-width: 100%;
+  }
+}
