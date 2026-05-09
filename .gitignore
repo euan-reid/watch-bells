@@ -4,3 +4,12 @@ __pycache__
 *.spec
 build
 dist
+.DS_Store
+
+# Added by cargo
+
+/target
+
+# Cloudflare Workers local state
+website/.wrangler/
+website/.dev.vars
