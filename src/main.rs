@@ -248,6 +248,8 @@ impl App {
                 return;
             }
 
+            let mut last_boundary_minute = None;
+
             loop {
                 let next_boundary = next_half_hour(Local::now());
                 let timeout = duration_until(next_boundary);
@@ -255,14 +257,24 @@ impl App {
                 match scheduler_rx.recv_timeout(timeout) {
                     Ok(SchedulerCommand::Quit) => break,
                     Err(RecvTimeoutError::Timeout) => {
-                        let boundary_state = watch_and_bells_for_time(Local::now());
-                        if event_proxy
-                            .send_event(UserEvent::Scheduler(SchedulerEvent::Boundary(
-                                boundary_state,
-                            )))
-                            .is_err()
+                        let now = Local::now();
+                        let current_minute = now.minute();
+
+                        // Only fire boundary event if we're at a half-hour boundary (0 or 30)
+                        // and haven't already fired for this boundary (guard against sleep/wake edge cases)
+                        if (current_minute == 0 || current_minute == 30)
+                            && last_boundary_minute != Some(current_minute)
                         {
-                            break;
+                            last_boundary_minute = Some(current_minute);
+                            let boundary_state = watch_and_bells_for_time(now);
+                            if event_proxy
+                                .send_event(UserEvent::Scheduler(SchedulerEvent::Boundary(
+                                    boundary_state,
+                                )))
+                                .is_err()
+                            {
+                                break;
+                            }
                         }
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
