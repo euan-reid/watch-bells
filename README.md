@@ -20,8 +20,11 @@ On most systems, you can add it to your startup applications to run automaticall
 **macOS:**
 
 - Requires macOS 10.13 or later
-- Tray icon will appear in the menu bar (top right)
+- Download the macOS `.zip`, unzip it, and drag `Watch Bells.app` to
+  Applications if you want to keep it installed
+- Tray icon will appear in the menu bar (top right) with no Dock icon
 - To run at startup, add the application to System Settings → General → Login Items
+- To see logs while testing, run it from Terminal or set `WATCH_BELLS_LOG=1`
 
 **Linux:**
 
@@ -46,6 +49,8 @@ On most systems, you can add it to your startup applications to run automaticall
 
 - Requires Windows 7 or later
 - Tray icon will appear in the system tray (bottom right)
+- The Windows build is packaged as a GUI app, so double-clicking it will not
+  open a console window
 - To run at startup, create a shortcut in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
 
 ## Development
@@ -79,6 +84,9 @@ The project includes comprehensive unit tests for all watch schedules and bell c
 cargo test --verbose
 ```
 
+GUI launches stay quiet by default. If you want startup logs while running from
+Terminal, set `WATCH_BELLS_LOG=1`.
+
 All tests verify:
 
 - Each of the 7 watches (First, Middle, Morning, Forenoon,
@@ -87,6 +95,18 @@ All tests verify:
 - The Nore mutiny rule (LastDog never rings 5 bells:
   8-1-2-3-4-1-2-3 pattern)
 - Tooltip formatting and next bell boundary calculations
+
+### Packaging
+
+The macOS release flow lives in a reusable Cargo task:
+
+```bash
+cargo build --release
+cargo run --bin xtask -- package-macos --binary target/release/watch-bells --out dist/macos --version <release-version>
+cargo run --bin xtask -- publish-downloads --source dist --website website/public/downloads --version <release-version>
+```
+
+Use your current version number when you want to stage release assets locally.
 
 ### Code Structure
 

@@ -65,14 +65,14 @@ install:linux:
 test:linux:
   stage: test
   extends: .linux_rust_job
-  needs: [install:linux]
+  needs: ["install:linux"]
   script:
     - cargo test --verbose
 
 lint:linux:
   stage: test
   extends: .linux_rust_job
-  needs: [install:linux]
+  needs: ["install:linux"]
   script:
     - rustup component add clippy
     - cargo clippy --all-targets -- -D warnings
@@ -80,7 +80,7 @@ lint:linux:
 build:linux:
   stage: build
   extends: .linux_rust_job
-  needs: [install:linux]
+  needs: ["install:linux"]
   script:
     - cargo build --verbose --release
     - mkdir -p dist/linux
@@ -94,7 +94,7 @@ build:linux:
 build:windows:
   stage: build
   extends: .linux_rust_job
-  needs: [install:linux]
+  needs: ["install:linux"]
   script:
     - rustup target add x86_64-pc-windows-gnu
     - cargo build --verbose --release --target x86_64-pc-windows-gnu
@@ -137,7 +137,7 @@ build:macos:
   tags:
     - saas-macos-medium-m1
   image: macos-15-xcode-16
-  needs: [install:macos]
+  needs: ["install:macos"]
   before_script:
     - |
       if ! command -v rustup >/dev/null 2>&1; then
@@ -154,13 +154,12 @@ build:macos:
   script:
     - source "$HOME/.cargo/env"
     - cargo build --verbose --release
-    - mkdir -p dist/macos
-    - cp target/release/watch-bells dist/macos/watch-bells-macos-aarch64
+    - cargo run --verbose --release --bin xtask -- package-macos --binary target/release/watch-bells --out dist/macos --version "${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
   artifacts:
     name: watch-bells-macos-${CI_COMMIT_SHORT_SHA}
     expire_in: 2 days
     paths:
-      - dist/macos/watch-bells-macos-aarch64
+      - dist/macos/watch-bells-macos-aarch64.zip
 
 package:website-downloads:
   stage: package
@@ -185,29 +184,14 @@ package:website-downloads:
     - git --no-pager remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
     - git --no-pager fetch origin "${CI_DEFAULT_BRANCH}"
     - git --no-pager checkout -B "${CI_DEFAULT_BRANCH}" "origin/${CI_DEFAULT_BRANCH}"
-    - VERSION="${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
-    - VERSION_DIR="website/public/downloads/${VERSION}"
-    - LATEST_DIR="website/public/downloads/latest"
-    - rm -rf "${VERSION_DIR}"
-    - mkdir -p "${VERSION_DIR}" "${LATEST_DIR}"
-    - rm -f "${LATEST_DIR}/watch-bells-linux-x86_64" "${LATEST_DIR}/watch-bells-windows-x86_64.exe" "${LATEST_DIR}/watch-bells-macos-aarch64" "${LATEST_DIR}/VERSION"
-    - cp dist/linux/watch-bells-linux-x86_64 "${VERSION_DIR}/"
-    - cp dist/linux/watch-bells-linux-x86_64 "${LATEST_DIR}/"
-    - cp dist/windows/watch-bells-windows-x86_64.exe "${VERSION_DIR}/"
-    - cp dist/windows/watch-bells-windows-x86_64.exe "${LATEST_DIR}/"
-    - |
-      if [ -f dist/macos/watch-bells-macos-aarch64 ]; then
-        cp dist/macos/watch-bells-macos-aarch64 "${VERSION_DIR}/"
-        cp dist/macos/watch-bells-macos-aarch64 "${LATEST_DIR}/"
-      fi
-    - printf "%s\n" "${VERSION}" > "${LATEST_DIR}/VERSION"
-    - git --no-pager add -A "${VERSION_DIR}" "${LATEST_DIR}"
+    - cargo run --verbose --release --bin xtask -- publish-downloads --source dist --website website/public/downloads --version "${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
+    - git --no-pager add -A website/public/downloads
     - |
       if git --no-pager diff --cached --quiet; then
         echo "No download updates to commit."
         exit 0
       fi
-    - 'git --no-pager commit -m "chore(downloads): publish ${VERSION} binaries [skip ci]"'
+    - 'git --no-pager commit -m "chore(downloads): publish ${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}} binaries"'
     - git --no-pager push origin "HEAD:${CI_DEFAULT_BRANCH}"
   artifacts:
     name: watch-bells-site-downloads-${CI_COMMIT_SHORT_SHA}
