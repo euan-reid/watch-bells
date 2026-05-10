@@ -110,6 +110,9 @@ See `.gitlab-ci.yml` for build configuration.
 
 ## Release History
 
+- 0.5.1
+  - Fix issues relating to system sleep and wake causing incorrect chimes at
+  incorrect times
 - 0.5.0
   - Complete rewrite in Rust for performance and cross-platform stability
   - Event-driven architecture replacing polling loop for responsive UI
