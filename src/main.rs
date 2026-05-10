@@ -415,17 +415,19 @@ fn append_embedded_wav(player: &Player, asset_name: &str) -> Result<(), String> 
 fn play_bells_audio(bells: u32) -> Result<(), String> {
     let sink_handle = DeviceSinkBuilder::open_default_sink()
         .map_err(|err| format!("failed to open default audio output: {err}"))?;
-    let player = Player::connect_new(sink_handle.mixer());
 
     let pairs = bells / 2;
     for _ in 0..pairs {
+        let player = Player::connect_new(sink_handle.mixer());
         append_embedded_wav(&player, "chime_twice.wav")?;
+        player.sleep_until_end();
     }
     if !bells.is_multiple_of(2) {
+        let player = Player::connect_new(sink_handle.mixer());
         append_embedded_wav(&player, "chime_once.wav")?;
+        player.sleep_until_end();
     }
 
-    player.sleep_until_end();
     Ok(())
 }
 
