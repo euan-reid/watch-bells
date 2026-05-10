@@ -151,8 +151,9 @@ served by Cloudflare Workers Static Assets.
 - Always-current binaries: `website/public/downloads/latest/`
 
 Tagged pipelines in GitLab CI run `package:website-downloads`, which copies
-release binaries into those `website/public/downloads/` folders so they can be
-deployed with the site.
+release binaries into those `website/public/downloads/` folders and commits
+them back to the default branch for long-term storage before deployment (using
+`CI_JOB_TOKEN` push permissions).
 
 Deploy from the `website/` folder:
 
