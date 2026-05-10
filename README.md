@@ -130,6 +130,9 @@ See `.gitlab-ci.yml` for build configuration.
 
 ## Release History
 
+- 0.6.0
+  - Bundle app as GUI application on Windows to avoid console window popping up
+  - Bundle app as .app on macOS for easier installation and startup management
 - 0.5.1
   - Fix issues relating to system sleep and wake causing incorrect chimes at
   incorrect times
