@@ -11,9 +11,9 @@ half hour, just like a real ship's chronometer.
 
 ## Installation
 
-Download the latest release binary for your platform (macOS, Linux, or Windows),
-make it executable, and run it. On most systems, you can add it to your startup
-applications to run automatically.
+Download the latest release binary for your platform (macOS, Linux, or Windows)
+from <https://www.watchbells.com/downloads/>, make it executable, and run it.
+On most systems, you can add it to your startup applications to run automatically.
 
 ### Platform-Specific Notes
 
@@ -146,6 +146,13 @@ served by Cloudflare Workers Static Assets.
 - Domain: <https://www.watchbells.com>
 - Worker config: `website/wrangler.jsonc`
 - Static files: `website/public/`
+- Downloads landing page: <https://www.watchbells.com/downloads/>
+- Versioned release binaries: `website/public/downloads/<tag>/`
+- Always-current binaries: `website/public/downloads/latest/`
+
+Tagged pipelines in GitLab CI run `package:website-downloads`, which copies
+release binaries into those `website/public/downloads/` folders so they can be
+deployed with the site.
 
 Deploy from the `website/` folder:
 
