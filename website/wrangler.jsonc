@@ -1,10 +1,11 @@
 {
   "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
   "name": "watchbells-site",
-  "compatibility_date": "2026-05-09",
+  "compatibility_date": "2026-08-17",
   "assets": {
     "directory": "./public",
-    "not_found_handling": "single-page-application",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
   },
   "routes": [
     {

@@ -1,88 +1,428 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en-GB">
     <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Watch Bells</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Watch Bells — Traditional ship's bells for your computer</title>
         <meta
             name="description"
-            content="Watch Bells is a simple app that plays traditional ship's bells every half hour."
-        />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;700&display=swap"
-            rel="stylesheet"
-        />
-        <link rel="stylesheet" href="/styles.css" />
+            content="Watch Bells brings the traditional naval watch and ship's bell system to macOS, Windows, and Linux. Native, precise, offline, and open source."
+>
+        <link rel="canonical" href="https://www.watchbells.com/">
+        <link rel="icon" href="/bell-mark.svg" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="/icon.png">
+        <meta name="theme-color" content="#071b2b">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="Watch Bells">
+        <meta property="og:url" content="https://www.watchbells.com/">
+        <meta
+            property="og:title"
+            content="Watch Bells — Traditional ship's bells for your computer"
+>
+        <meta
+            property="og:description"
+            content="Naval watch and ship's bells for macOS, Windows, and Linux."
+>
+        <meta name="twitter:card" content="summary">
+        <meta
+            name="twitter:title"
+            content="Watch Bells — Traditional ship's bells for your computer"
+>
+        <meta
+            name="twitter:description"
+            content="Naval watch and ship's bells for macOS, Windows, and Linux."
+>
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "SoftwareApplication",
+                "name": "Watch Bells",
+                "applicationCategory": "UtilitiesApplication",
+                "operatingSystem": "macOS, Windows, Linux",
+                "description": "A native utility that sounds traditional ship's bells every half hour according to the naval watch system.",
+                "url": "https://www.watchbells.com/",
+                "downloadUrl": "https://www.watchbells.com/downloads/",
+                "license": "https://gitlab.com/euan/watch-bells/-/blob/master/LICENSE",
+                "creator": {
+                    "@type": "Person",
+                    "name": "Euan Reid"
+                }
+            }
+        </script>
+        <link rel="stylesheet" href="/styles.css">
+        <script src="/bells.js" defer></script>
     </head>
     <body>
-        <div class="bg-shape bg-shape-a" aria-hidden="true"></div>
-        <div class="bg-shape bg-shape-b" aria-hidden="true"></div>
+        <a class="skip-link" href="#main-content">Skip to main content</a>
 
-        <main class="shell">
-            <header class="hero">
-                <p class="kicker">Computer time for seafarers</p>
-                <h1>Watch Bells</h1>
-                <p class="lead">
-                    A tiny app that sits quietly in the background and rings
-                    maritime watch bells every half hour.
-                </p>
-                <div class="cta-row">
-                    <a class="btn btn-primary" href="/downloads/">
-                        Download Watch Bells
-                    </a>
-                    <a
-                        class="btn btn-secondary"
-                        href="https://gitlab.com/euan/watch-bells"
-                    >
-                        Source Code
-                    </a>
-                    <a
-                        class="btn btn-secondary"
-                        href="https://www.euanreid.com/projects/watch-bells/"
-                    >
-                        Original Project Page
-                    </a>
-                </div>
+        <div class="hero-field">
+            <header class="site-header frame">
+                <a class="wordmark" href="/" aria-label="Watch Bells, home">
+                    <img src="/bell-mark.svg" alt="" width="30" height="30">
+                    <span>Watch Bells</span>
+                </a>
+                <nav aria-label="Primary navigation">
+                    <a href="#tradition">The tradition</a>
+                    <a href="#software">The software</a>
+                    <a href="/downloads/">Download</a>
+                </nav>
             </header>
 
-            <section class="download-panel" aria-label="Downloads">
-                <h2>Download Watch Bells</h2>
-                <p>
-                    Get the latest version for Windows, Mac, or Linux from our
-                    download page.
-                </p>
-                <a class="btn btn-primary" href="/downloads/">Open downloads</a>
-            </section>
+            <main id="main-content">
+                <section class="hero frame" aria-labelledby="hero-title">
+                    <div class="live-instrument" role="status" aria-live="polite">
+                        <span class="live-label" aria-hidden="true">Local signal</span>
+                        <span id="live-bells">
+                            Traditional ship's bells, every half hour
+                        </span>
+                    </div>
 
-            <section class="cards" aria-label="Highlights">
-                <article class="card">
-                    <h2>Works on your computer</h2>
-                    <p>Available for Windows, Mac, and Linux.</p>
-                </article>
-                <article class="card">
-                    <h2>Keeps true ship's time</h2>
-                    <p>
-                        Follows the classic watch system and rings on schedule
-                        through the day and night.
-                    </p>
-                </article>
-                <article class="card">
-                    <h2>Always nearby, never noisy</h2>
-                    <p>
-                        Lives in your system tray, shows the current watch and
-                        bell count, and can be muted any time.
-                    </p>
-                </article>
-            </section>
+                    <div class="hero-layout">
+                        <div class="hero-copy">
+                            <p class="eyebrow">Naval timekeeping · Desktop utility</p>
+                            <h1 id="hero-title">Watch Bells</h1>
+                            <p class="hero-tagline">Traditional ship's bells for your computer.</p>
+                            <div class="hero-introduction">
+                                <p>
+                                    A ship's bell divides each four-hour watch into
+                                    half-hours. One bell sounds after the first half-hour,
+                                    two after the first hour, and so on until eight bells
+                                    marks the watch's end.
+                                </p>
+                                <p>
+                                    Watch Bells brings that traditional rhythm to your
+                                    Mac, Windows, or Linux computer.
+                                </p>
+                            </div>
+                            <div class="actions">
+                                <a class="action action-primary" href="/downloads/">
+                                    Download Watch Bells
+                                </a>
+                                <a
+                                    class="action action-secondary"
+                                    href="https://gitlab.com/euan/watch-bells"
+                                >
+                                    View source code
+                                </a>
+                            </div>
+                        </div>
 
-            <section class="links" aria-label="Links">
-                <a href="https://www.euanreid.com/projects/watch-bells/">
-                    Original Project Page
+                        <figure class="bell-plate">
+                            <div class="plate-heading">
+                                <span>Time signal</span>
+                                <span>WB · 08</span>
+                            </div>
+                            <img
+                                class="hero-bell"
+                                src="/bell-mark.svg"
+                                alt="A brass ship's bell"
+                                width="220"
+                                height="220"
+>
+                            <figcaption>
+                                <span>Struck in pairs</span>
+                                <strong role="img" aria-label="Eight bells">
+                                    <span aria-hidden="true">••&nbsp; ••&nbsp; ••&nbsp; ••</span>
+                                </strong>
+                                <span>Eight bells · watch relieved</span>
+                            </figcaption>
+                        </figure>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <section class="document-section" id="tradition" aria-labelledby="bells-heading">
+            <div class="frame section-grid">
+                <header class="section-heading">
+                    <p class="section-index">Signal book · 01</p>
+                    <h2 id="bells-heading">How ship's bells tell time</h2>
+                    <p>
+                        The count records elapsed half-hours within a watch - not the
+                        hour shown on a civil clock. Strikes come in pairs so they
+                        can be counted easily, with a final single strike for odd
+                        numbers. After eight bells, the next half-hour returns to one.
+                    </p>
+                </header>
+
+                <div
+                    class="bell-reference"
+                    role="group"
+                    aria-label="Four-hour bell progression"
+                >
+                    <div class="reference-header" aria-hidden="true">
+                        <span>Elapsed</span>
+                        <span>Signal</span>
+                        <span>Count</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>½</b> hour</span>
+                        <span class="strikes" role="img" aria-label="One bell"><i aria-hidden="true">•</i></span>
+                        <span>One</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>1</b> hour</span>
+                        <span class="strikes" role="img" aria-label="Two bells"><i aria-hidden="true">••</i></span>
+                        <span>Two</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>1½</b> hours</span>
+                        <span class="strikes" role="img" aria-label="Three bells"><i aria-hidden="true">••&nbsp; •</i></span>
+                        <span>Three</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>2</b> hours</span>
+                        <span class="strikes" role="img" aria-label="Four bells"><i aria-hidden="true">••&nbsp; ••</i></span>
+                        <span>Four</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>2½</b> hours</span>
+                        <span class="strikes" role="img" aria-label="Five bells"><i aria-hidden="true">••&nbsp; ••&nbsp; •</i></span>
+                        <span>Five</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>3</b> hours</span>
+                        <span class="strikes" role="img" aria-label="Six bells"><i aria-hidden="true">••&nbsp; ••&nbsp; ••</i></span>
+                        <span>Six</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>3½</b> hours</span>
+                        <span class="strikes" role="img" aria-label="Seven bells"><i aria-hidden="true">••&nbsp; ••&nbsp; ••&nbsp; •</i></span>
+                        <span>Seven</span>
+                    </div>
+                    <div class="reference-row">
+                        <span><b>4</b> hours</span>
+                        <span class="strikes" role="img" aria-label="Eight bells"><i aria-hidden="true">••&nbsp; ••&nbsp; ••&nbsp; ••</i></span>
+                        <span>Eight</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="watches-section" aria-labelledby="watches-heading">
+            <div class="frame">
+                <header class="section-heading section-heading-wide">
+                    <p class="section-index">Watch bill · 02</p>
+                    <h2 id="watches-heading">The seven watches</h2>
+                    <p>
+                        Five watches occupy four hours apiece. The evening period
+                        is divided into two shorter dog watches, producing an odd
+                        number of duties so the same people need not stand the same
+                        watch every day.
+                    </p>
+                </header>
+
+                <div class="watch-rail" aria-hidden="true">
+                    <span class="watch-block span-2">Middle</span>
+                    <span class="watch-block span-2">Morning</span>
+                    <span class="watch-block span-2">Forenoon</span>
+                    <span class="watch-block span-2">Afternoon</span>
+                    <span class="watch-block dog span-1">First dog</span>
+                    <span class="watch-block dog span-1">Last dog</span>
+                    <span class="watch-block span-2">First</span>
+                    <span class="rail-time time-00">00</span>
+                    <span class="rail-time time-04">04</span>
+                    <span class="rail-time time-08">08</span>
+                    <span class="rail-time time-12">12</span>
+                    <span class="rail-time time-16">16</span>
+                    <span class="rail-time time-18">18</span>
+                    <span class="rail-time time-20">20</span>
+                    <span class="rail-time time-24">24</span>
+                </div>
+
+                <table class="watch-table">
+                    <caption>Traditional naval watches</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Watch</th>
+                            <th scope="col">Begins</th>
+                            <th scope="col">Ends</th>
+                            <th scope="col">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <th scope="row">Middle watch</th>
+                            <td>00:00</td>
+                            <td>04:00</td>
+                            <td>4 hours</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Morning watch</th>
+                            <td>04:00</td>
+                            <td>08:00</td>
+                            <td>4 hours</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Forenoon watch</th>
+                            <td>08:00</td>
+                            <td>12:00</td>
+                            <td>4 hours</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Afternoon watch</th>
+                            <td>12:00</td>
+                            <td>16:00</td>
+                            <td>4 hours</td>
+                        </tr>
+                        <tr class="dog-row">
+                            <th scope="row">First dog watch</th>
+                            <td>16:00</td>
+                            <td>18:00</td>
+                            <td>2 hours</td>
+                        </tr>
+                        <tr class="dog-row">
+                            <th scope="row">Last dog watch</th>
+                            <td>18:00</td>
+                            <td>20:00</td>
+                            <td>2 hours</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">First watch</th>
+                            <td>20:00</td>
+                            <td>00:00</td>
+                            <td>4 hours</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="exception-section" aria-labelledby="exception-heading">
+            <div class="frame exception-grid">
+                <header>
+                    <p class="section-index section-index-light">Special order · 1797</p>
+                    <h2 id="exception-heading">Except, of course, when they don't.</h2>
+                </header>
+                <div class="exception-copy">
+                    <p>
+                        The two dog watches interrupt the ordinary four-hour
+                        progression. In the Last Dog Watch, Watch Bells also follows
+                        the British convention associated with the Nore mutiny of
+                        1797: five bells at 18:30 are omitted, the reputed signal for
+                        the mutiny to commence.
+                    </p>
+                    <p>
+                        The result is the peculiar sequence below. At 18:30 the
+                        count returns to one; at 20:00, eight bells still marks the
+                        change to the First Watch.
+                    </p>
+                </div>
+
+                <div
+                    class="dog-sequence"
+                    role="group"
+                    aria-label="Dog watch bell sequence from 16:00 to 20:00"
+                >
+                    <div class="dog-heading dog-first">First dog watch</div>
+                    <div class="dog-heading dog-last">Last dog watch</div>
+                    <div class="dog-heading dog-relief">Relief</div>
+                    <div class="dog-boundary">
+                        <time datetime="16:00">16:00</time><b role="img" aria-label="Eight bells">8</b>
+                    </div>
+                    <div class="dog-boundary">
+                        <time datetime="16:30">16:30</time><b role="img" aria-label="One bell">1</b>
+                    </div>
+                    <div class="dog-boundary">
+                        <time datetime="17:00">17:00</time><b role="img" aria-label="Two bells">2</b>
+                    </div>
+                    <div class="dog-boundary">
+                        <time datetime="17:30">17:30</time><b role="img" aria-label="Three bells">3</b>
+                    </div>
+                    <div class="dog-boundary dog-turn">
+                        <time datetime="18:00">18:00</time><b role="img" aria-label="Four bells">4</b>
+                    </div>
+                    <div class="dog-boundary dog-nore">
+                        <time datetime="18:30">18:30</time><b role="img" aria-label="One bell">1</b>
+                    </div>
+                    <div class="dog-boundary">
+                        <time datetime="19:00">19:00</time><b role="img" aria-label="Two bells">2</b>
+                    </div>
+                    <div class="dog-boundary">
+                        <time datetime="19:30">19:30</time><b role="img" aria-label="Three bells">3</b>
+                    </div>
+                    <div class="dog-boundary dog-end">
+                        <time datetime="20:00">20:00</time><b role="img" aria-label="Eight bells">8</b>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="software-section" id="software" aria-labelledby="software-heading">
+            <div class="frame section-grid">
+                <header class="section-heading">
+                    <p class="section-index">Engine room · 03</p>
+                    <h2 id="software-heading">Old convention. Modern machinery.</h2>
+                    <p>
+                        Watch Bells is a small native Rust application. It waits in
+                        your menu bar or system tray, sounds the correct sequence at
+                        each half-hour boundary, and otherwise stays out of the way.
+                    </p>
+                </header>
+
+                <div class="software-specification">
+                    <div class="spec-row">
+                        <span>Construction</span>
+                        <strong>Native Rust application</strong>
+                        <p>No Electron bloat or separate runtime.</p>
+                    </div>
+                    <div class="spec-row">
+                        <span>Stations</span>
+                        <strong>macOS · Windows · Linux</strong>
+                        <p>Works across all platforms.</p>
+                    </div>
+                    <div class="spec-row">
+                        <span>Operation</span>
+                        <strong>Offline and unobtrusive</strong>
+                        <p>Mute controls and no network dependency.</p>
+                    </div>
+                    <div class="spec-row">
+                        <span>Inspection</span>
+                        <strong>Open source</strong>
+                        <p>MIT licensed.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="download-section" aria-labelledby="download-heading">
+            <div class="frame download-layout">
+                <div>
+                    <p class="section-index section-index-light">Ready for service</p>
+                    <h2 id="download-heading">Put your computer on ship's time.</h2>
+                    <p>Current builds are available for macOS, Windows, and Linux.</p>
+                </div>
+                <a class="action action-brass" href="/downloads/">
+                    Choose your download
                 </a>
-                <a href="/downloads/">Downloads</a>
-            </section>
-        </main>
+            </div>
+        </section>
+
+        <aside class="provenance" aria-labelledby="provenance-heading">
+            <div class="frame provenance-layout">
+                <span class="provenance-mark" aria-hidden="true"></span>
+                <div>
+                    <p class="section-index">Provenance</p>
+                    <h2 id="provenance-heading">The story behind Watch Bells</h2>
+                    <p>
+                        Watch Bells began as a small personal project by Euan Reid.
+                        <a href="https://www.euanreid.com/projects/watch-bells/">
+                            Read the original project write-up <span aria-hidden="true">→</span>
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </aside>
+
+        <footer class="site-footer">
+            <div class="frame footer-layout">
+                <p>Watch Bells · Traditional ship's bells for your computer</p>
+                <nav aria-label="Footer navigation">
+                    <a href="/downloads/">Downloads</a>
+                    <a href="https://gitlab.com/euan/watch-bells">Source</a>
+                    <a href="https://gitlab.com/euan/watch-bells/releases">Releases</a>
+                </nav>
+            </div>
+        </footer>
     </body>
 </html>

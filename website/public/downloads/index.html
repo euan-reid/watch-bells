@@ -1,77 +1,158 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en-GB">
     <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>Watch Bells Downloads</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Download Watch Bells for macOS, Windows, and Linux</title>
         <meta
             name="description"
-            content="Download Watch Bells for Windows, Mac, or Linux."
-        />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-            href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;700&display=swap"
-            rel="stylesheet"
-        />
-        <link rel="stylesheet" href="/styles.css" />
+            content="Download the current Watch Bells native application for macOS, Windows, or Linux."
+>
+        <link rel="canonical" href="https://www.watchbells.com/downloads/">
+        <link rel="icon" href="/bell-mark.svg" type="image/svg+xml">
+        <link rel="apple-touch-icon" href="/icon.png">
+        <meta name="theme-color" content="#071b2b">
+        <meta property="og:type" content="website">
+        <meta property="og:site_name" content="Watch Bells">
+        <meta property="og:url" content="https://www.watchbells.com/downloads/">
+        <meta property="og:title" content="Download Watch Bells">
+        <meta
+            property="og:description"
+            content="Current native builds for macOS, Windows, and Linux."
+>
+        <meta name="twitter:card" content="summary">
+        <meta name="twitter:title" content="Download Watch Bells">
+        <meta
+            name="twitter:description"
+            content="Current native builds for macOS, Windows, and Linux."
+>
+        <link rel="stylesheet" href="/styles.css">
     </head>
-    <body>
-        <div class="bg-shape bg-shape-a" aria-hidden="true"></div>
-        <div class="bg-shape bg-shape-b" aria-hidden="true"></div>
+    <body class="downloads-page">
+        <a class="skip-link" href="#main-content">Skip to main content</a>
 
-        <main class="shell">
-            <header class="hero">
-                <p class="kicker">Watch Bells</p>
-                <h1>Downloads</h1>
-                <p class="lead">
-                    Download Watch Bells for your computer and start hearing
-                    traditional ship's bells every half hour.
-                </p>
+        <div class="page-masthead">
+            <header class="site-header frame">
+                <a class="wordmark" href="/" aria-label="Watch Bells, home">
+                    <img src="/bell-mark.svg" alt="" width="30" height="30">
+                    <span>Watch Bells</span>
+                </a>
+                <nav aria-label="Primary navigation">
+                    <a href="/#tradition">The tradition</a>
+                    <a href="/#software">The software</a>
+                    <a href="/downloads/" aria-current="page">Download</a>
+                </nav>
             </header>
 
-            <section
-                class="download-panel"
-                aria-label="Latest release downloads"
-            >
-                <h2>Latest release</h2>
+            <div class="frame page-title">
+                <p class="eyebrow">Stores division · Current issue</p>
+                <h1>Downloads</h1>
                 <p>
-                    Choose your operating system below. Each link always points
-                    to the newest version.
+                    Select the native build for your computer.
                 </p>
-                <div class="cta-row">
-                    <a
-                        class="btn btn-primary"
-                        href="/downloads/latest/watch-bells-windows-x86_64.exe"
-                        >Download for Windows</a
-                    >
-                    <a
-                        class="btn btn-primary"
-                        href="/downloads/latest/watch-bells-macos-aarch64.zip"
-                        >Download for Mac (.zip)</a
-                    >
-                    <a
-                        class="btn btn-primary"
-                        href="/downloads/latest/watch-bells-linux-x86_64"
-                        >Download for Linux</a
-                    >
+            </div>
+        </div>
+
+        <main id="main-content" class="downloads-main">
+            <section class="frame" aria-labelledby="current-builds-heading">
+                <header class="section-heading section-heading-wide downloads-heading">
+                    <p class="section-index">Issue table · 01</p>
+                    <h2 id="current-builds-heading">Current builds</h2>
+                    <p>
+                        Watch Bells runs locally and does not need a network
+                        connection after download.
+                    </p>
+                </header>
+
+                <div class="download-table">
+                    <article class="download-row">
+                        <div class="platform-code" aria-hidden="true">MAC</div>
+                        <div class="platform-copy">
+                            <h3>macOS</h3>
+                            <p>Apple silicon · Application bundle · ZIP archive</p>
+                        </div>
+                        <a
+                            class="download-link"
+                            href="/downloads/latest/watch-bells-macos-aarch64.zip"
+                            download
+                        >
+                            Download <span aria-hidden="true">↓</span>
+                        </a>
+                    </article>
+
+                    <article class="download-row">
+                        <div class="platform-code" aria-hidden="true">WIN</div>
+                        <div class="platform-copy">
+                            <h3>Windows</h3>
+                            <p>64-bit Intel/AMD · Standalone executable</p>
+                        </div>
+                        <a
+                            class="download-link"
+                            href="/downloads/latest/watch-bells-windows-x86_64.exe"
+                            download
+                        >
+                            Download <span aria-hidden="true">↓</span>
+                        </a>
+                    </article>
+
+                    <article class="download-row">
+                        <div class="platform-code" aria-hidden="true">LNX</div>
+                        <div class="platform-copy">
+                            <h3>Linux</h3>
+                            <p>64-bit Intel/AMD · Standalone binary</p>
+                        </div>
+                        <a
+                            class="download-link"
+                            href="/downloads/latest/watch-bells-linux-x86_64"
+                            download
+                        >
+                            Download <span aria-hidden="true">↓</span>
+                        </a>
+                    </article>
+                </div>
+
+                <div class="installation-note">
+                    <h2>Installation notes</h2>
+                    <p>
+                        Unzip the macOS download and move Watch Bells to
+                        Applications. Windows can run the downloaded executable
+                        directly. On Linux, mark the binary as executable before
+                        running it: <code>chmod +x watch-bells-linux-x86_64</code>.
+                    </p>
                 </div>
             </section>
 
-            <section class="download-panel" aria-label="Versioned path format">
-                <h2>Need an older version?</h2>
-                <p>
-                    Visit the release history to browse previous versions and
-                    release notes.
-                </p>
+            <section class="release-history" aria-labelledby="history-heading">
+                <div class="frame release-layout">
+                    <div>
+                        <p class="section-index section-index-light">Archive · 02</p>
+                        <h2 id="history-heading">Need an older issue?</h2>
+                    </div>
+                    <p>
+                        Previous versions and their release notes remain available
+                        in the project archive.
+                        <a href="https://gitlab.com/euan/watch-bells/releases">
+                            Visit the release history <span aria-hidden="true">→</span>
+                        </a>
+                    </p>
+                </div>
             </section>
 
-            <section class="links" aria-label="Navigation links">
-                <a href="/">Back to home</a>
-                <a href="https://gitlab.com/euan/watch-bells/releases"
-                    >GitLab releases</a
-                >
-            </section>
+            <nav class="frame return-navigation" aria-label="Related pages">
+                <a href="/"><span aria-hidden="true">←</span> Return to Watch Bells</a>
+                <a href="https://gitlab.com/euan/watch-bells">Inspect the source code</a>
+            </nav>
         </main>
+
+        <footer class="site-footer">
+            <div class="frame footer-layout">
+                <p>Watch Bells · Traditional ship's bells for your computer</p>
+                <nav aria-label="Footer navigation">
+                    <a href="/">Home</a>
+                    <a href="https://gitlab.com/euan/watch-bells">Source</a>
+                    <a href="https://gitlab.com/euan/watch-bells/releases">Releases</a>
+                </nav>
+            </div>
+        </footer>
     </body>
 </html>
