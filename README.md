@@ -58,21 +58,24 @@ The same current release files are also available from
 
 ### Logging
 
-Warnings and errors are automatically saved during ordinary GUI launches. The
-log is a plain-text forensic record: routine successful activity is deliberately
-not retained. Log locations are:
+INFO-level operational events, warnings, and errors are automatically saved
+during ordinary GUI launches. The plain-text log is a forensic record of
+low-volume activity; DEBUG and noisy routine activity are deliberately not
+retained. Log locations are:
 
 - macOS: `~/Library/Logs/Watch Bells/watch-bells.log`
 - Windows: `%LOCALAPPDATA%\Watch Bells\watch-bells.log`
 - Linux: `$XDG_STATE_HOME/watch-bells/watch-bells.log`, or
   `~/.local/state/watch-bells/watch-bells.log` when `XDG_STATE_HOME` is not set
 
-The current log is rotated at approximately 512 KiB, retaining one previous
-`watch-bells.old.log` generation. Rotation and logfile setup are best effort;
-they never prevent the application from running. When stderr is attached to a
-terminal, `INFO` and above are also printed there. Setting `WATCH_BELLS_LOG=1`
-enables `DEBUG` and above for interactive diagnostics, including GUI launches.
-Interactive verbosity is independent of the persistent warning/error log.
+The current log is rotated live and at startup when it exceeds approximately
+512 KiB, retaining one previous `watch-bells.old.log` generation (roughly the
+current file plus one previous generation). Rotation and logfile setup are
+best effort; they never prevent the application from running.
+When stderr is attached to a terminal, `INFO` and above are also printed there.
+When `WATCH_BELLS_LOG` is set, `DEBUG` and above are printed for interactive
+diagnostics, including GUI launches. DEBUG remains excluded from the persistent
+INFO-and-above log.
 
 ## Development
 
@@ -107,9 +110,9 @@ cargo test --workspace --locked
 cargo clippy --workspace --locked --all-targets -- -D warnings
 ```
 
-GUI launches do not require stderr for diagnostics: warnings and errors are
-retained in the local logfile described above. Set `WATCH_BELLS_LOG=1` when
-debug-level interactive output is useful.
+GUI launches do not require stderr for diagnostics: INFO-level operational
+events, warnings, and errors are retained in the local logfile described above.
+Set `WATCH_BELLS_LOG` when debug-level interactive output is useful.
 
 All tests verify:
 

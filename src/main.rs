@@ -390,7 +390,12 @@ impl App {
         ])
         .expect("failed to build tray menu");
 
-        info!("Starting: {}", current_state.tooltip());
+        let muted = false;
+        info!(
+            "Starting Watch Bells v{}: {}, muted={muted}",
+            env!("CARGO_PKG_VERSION"),
+            current_state.tooltip()
+        );
 
         Self {
             event_proxy,
@@ -400,7 +405,7 @@ impl App {
             mute_i,
             quit_i,
             tray_icon: None,
-            muted: false,
+            muted,
             current_state,
             last_consumed_boundary: None,
             scheduler_tx: None,
@@ -685,7 +690,10 @@ fn play_bells_audio(boundary: DateTime<Utc>, state: ClockState) -> Result<(), St
         return Ok(());
     }
 
-    info!("Ringing {} bells", state.bells);
+    info!(
+        "Ringing {} bells at authorised UTC boundary {boundary}",
+        state.bells
+    );
 
     let bells = state.bells;
     let pairs = bells / 2;

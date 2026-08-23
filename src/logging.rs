@@ -15,7 +15,7 @@ const LINUX_APP_NAME: &str = "watch-bells";
 const LOG_FILE_NAME: &str = "watch-bells.log";
 const OLD_LOG_FILE_NAME: &str = "watch-bells.old.log";
 const MAX_LOG_SIZE: u64 = 512 * 1024;
-const PERSISTENT_LEVEL: LevelFilter = LevelFilter::Warn;
+const PERSISTENT_LEVEL: LevelFilter = LevelFilter::Info;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,8 +26,13 @@ enum Platform {
     Unsupported,
 }
 
+struct LogFile {
+    file: File,
+    path: PathBuf,
+}
+
 struct WatchBellsLogger {
-    file: Mutex<Option<File>>,
+    file: Mutex<Option<LogFile>>,
     stderr_level: LevelFilter,
 }
 
@@ -52,21 +57,15 @@ impl WatchBellsLogger {
 
     fn write_persistent(&self, line: &str) {
         let failure = {
-            let Ok(mut file) = self.file.lock() else {
+            let Ok(mut state) = self.file.lock() else {
                 return;
             };
-            let result = {
-                let Some(file) = file.as_mut() else {
-                    return;
-                };
-                file.write_all(line.as_bytes()).and_then(|()| file.flush())
-            };
 
-            match result {
+            match write_persistent_record(&mut state, line) {
                 Ok(()) => None,
                 Err(error) => {
-                    file.take();
-                    Some(format!("Watch Bells logfile write/flush failed: {error}"))
+                    state.take();
+                    Some(error)
                 }
             }
         };
@@ -102,10 +101,10 @@ impl Log for WatchBellsLogger {
     }
 
     fn flush(&self) {
-        if let Ok(mut file) = self.file.lock()
-            && let Some(file) = file.as_mut()
+        if let Ok(mut state) = self.file.lock()
+            && let Some(log_file) = state.as_mut()
         {
-            let _ = file.flush();
+            let _ = log_file.file.flush();
         }
 
         if self.stderr_level != LevelFilter::Off {
@@ -247,12 +246,12 @@ fn usable_base_path(path: Option<&Path>) -> Option<&Path> {
     path.filter(|path| !path.as_os_str().is_empty() && path.is_absolute())
 }
 
-fn open_log_file() -> Option<File> {
+fn open_log_file() -> Option<LogFile> {
     let directory = log_directory()?;
     open_log_file_at(&directory.join(LOG_FILE_NAME))
 }
 
-fn open_log_file_at(path: &Path) -> Option<File> {
+fn open_log_file_at(path: &Path) -> Option<LogFile> {
     let directory = path.parent()?;
     if fs::create_dir_all(directory).is_err() {
         return None;
@@ -260,7 +259,73 @@ fn open_log_file_at(path: &Path) -> Option<File> {
 
     rotate_log_if_needed(path);
 
-    OpenOptions::new().create(true).append(true).open(path).ok()
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()?;
+    Some(LogFile {
+        file,
+        path: path.to_path_buf(),
+    })
+}
+
+fn write_persistent_record(state: &mut Option<LogFile>, line: &str) -> Result<(), String> {
+    let path = {
+        let Some(log_file) = state.as_mut() else {
+            return Ok(());
+        };
+
+        log_file
+            .file
+            .write_all(line.as_bytes())
+            .map_err(|error| format!("Watch Bells logfile write failed: {error}"))?;
+        log_file
+            .file
+            .flush()
+            .map_err(|error| format!("Watch Bells logfile flush failed: {error}"))?;
+        let size = log_file
+            .file
+            .metadata()
+            .map_err(|error| format!("Watch Bells logfile size check failed: {error}"))?
+            .len();
+
+        if !needs_rotation(size) {
+            return Ok(());
+        }
+
+        log_file.path.clone()
+    };
+
+    drop(state.take());
+    rotate_live_log(state, &path)
+}
+
+fn rotate_live_log(state: &mut Option<LogFile>, path: &Path) -> Result<(), String> {
+    let old_path = path.with_file_name(OLD_LOG_FILE_NAME);
+    remove_previous_log(&old_path)
+        .map_err(|error| format!("Watch Bells previous logfile removal failed: {error}"))?;
+    fs::rename(path, &old_path)
+        .map_err(|error| format!("Watch Bells logfile rotation failed: {error}"))?;
+
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| format!("Watch Bells logfile reopen failed: {error}"))?;
+    *state = Some(LogFile {
+        file,
+        path: path.to_path_buf(),
+    });
+    Ok(())
+}
+
+fn remove_previous_log(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 fn rotate_log_if_needed(path: &Path) {
@@ -292,7 +357,7 @@ mod tests {
     use super::{
         APP_NAME, LINUX_APP_NAME, LOG_FILE_NAME, Level, LevelFilter, MAX_LOG_SIZE, Platform,
         format_log_line_at, level_enabled, log_directory_for, needs_rotation, open_log_file_at,
-        rotate_log_if_needed, usable_base_path,
+        rotate_log_if_needed, usable_base_path, write_persistent_record,
     };
 
     fn test_directory() -> PathBuf {
@@ -358,11 +423,11 @@ mod tests {
 
     #[test]
     fn persistent_and_stderr_thresholds_are_independent() {
-        assert!(level_enabled(Level::Error, LevelFilter::Warn));
-        assert!(level_enabled(Level::Warn, LevelFilter::Warn));
-        assert!(!level_enabled(Level::Info, LevelFilter::Warn));
-        assert!(level_enabled(Level::Debug, LevelFilter::Debug));
+        assert!(level_enabled(Level::Error, LevelFilter::Info));
+        assert!(level_enabled(Level::Warn, LevelFilter::Info));
+        assert!(level_enabled(Level::Info, LevelFilter::Info));
         assert!(!level_enabled(Level::Debug, LevelFilter::Info));
+        assert!(level_enabled(Level::Debug, LevelFilter::Debug));
         assert!(!level_enabled(Level::Info, LevelFilter::Off));
     }
 
@@ -420,6 +485,36 @@ mod tests {
         assert_eq!(
             fs::read(&old_path).expect("failed to read rotated log"),
             vec![b'c'; MAX_LOG_SIZE as usize + 1]
+        );
+
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn live_rotation_replaces_previous_generation_after_a_record() {
+        let directory = test_directory();
+        fs::create_dir_all(&directory).expect("failed to create test directory");
+
+        let path = directory.join(LOG_FILE_NAME);
+        let old_path = directory.join("watch-bells.old.log");
+        let current_generation = vec![b'c'; MAX_LOG_SIZE as usize - 1];
+        fs::write(&path, &current_generation).expect("failed to create current test log");
+        fs::write(&old_path, b"previous").expect("failed to create old test log");
+
+        let mut state = Some(open_log_file_at(&path).expect("failed to open current test log"));
+        write_persistent_record(&mut state, "live record\n").expect("live rotation should succeed");
+        assert!(state.is_some());
+        drop(state);
+
+        let mut expected_old = current_generation;
+        expected_old.extend_from_slice(b"live record\n");
+        assert_eq!(
+            fs::read(&old_path).expect("failed to read rotated log"),
+            expected_old
+        );
+        assert_eq!(
+            fs::read(&path).expect("failed to read new current log"),
+            b""
         );
 
         let _ = fs::remove_dir_all(directory);
