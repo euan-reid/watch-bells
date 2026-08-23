@@ -69,11 +69,11 @@
                         <div class="platform-code" aria-hidden="true">MAC</div>
                         <div class="platform-copy">
                             <h3>macOS</h3>
-                            <p>Apple silicon · Application bundle · ZIP archive</p>
+                            <p>Apple silicon &amp; Intel · Universal app · ZIP archive</p>
                         </div>
                         <a
                             class="download-link"
-                            href="/downloads/latest/watch-bells-macos-aarch64.zip"
+                            href="/downloads/latest/watch-bells-macos-universal.zip"
                             download
                         >
                             Download <span aria-hidden="true">↓</span>
@@ -99,11 +99,26 @@
                         <div class="platform-code" aria-hidden="true">LNX</div>
                         <div class="platform-copy">
                             <h3>Linux</h3>
-                            <p>64-bit Intel/AMD · Standalone binary</p>
+                            <p>64-bit Intel/AMD · Dynamically linked native binary</p>
                         </div>
                         <a
                             class="download-link"
                             href="/downloads/latest/watch-bells-linux-x86_64"
+                            download
+                        >
+                            Download <span aria-hidden="true">↓</span>
+                        </a>
+                    </article>
+
+                    <article class="download-row">
+                        <div class="platform-code" aria-hidden="true">ARM</div>
+                        <div class="platform-copy">
+                            <h3>Linux</h3>
+                            <p>ARM64 · Dynamically linked native binary</p>
+                        </div>
+                        <a
+                            class="download-link"
+                            href="/downloads/latest/watch-bells-linux-aarch64"
                             download
                         >
                             Download <span aria-hidden="true">↓</span>
@@ -115,9 +130,12 @@
                     <h2>Installation notes</h2>
                     <p>
                         Unzip the macOS download and move Watch Bells to
-                        Applications. Windows can run the downloaded executable
-                        directly. On Linux, mark the binary as executable before
-                        running it: <code>chmod +x watch-bells-linux-x86_64</code>.
+                        Applications. The same Mac download works on Apple silicon
+                        and Intel. Windows can run the downloaded executable directly.
+                        On Linux, mark the downloaded binary as executable before
+                        running it with <code>chmod +x watch-bells-linux-*</code>;
+                        the usual GTK 3, XCB, XKBCommon, ALSA, and xdo runtime
+                        libraries must be installed.
                     </p>
                 </div>
             </section>
@@ -131,7 +149,7 @@
                     <p>
                         Previous versions and their release notes remain available
                         in the project archive.
-                        <a href="https://gitlab.com/euan/watch-bells/releases">
+                        <a href="https://github.com/euan-reid/watch-bells/releases">
                             Visit the release history <span aria-hidden="true">→</span>
                         </a>
                     </p>
@@ -140,7 +158,7 @@
 
             <nav class="frame return-navigation" aria-label="Related pages">
                 <a href="/"><span aria-hidden="true">←</span> Return to Watch Bells</a>
-                <a href="https://gitlab.com/euan/watch-bells">Inspect the source code</a>
+                <a href="https://github.com/euan-reid/watch-bells">Inspect the source code</a>
             </nav>
         </main>
 
@@ -149,8 +167,8 @@
                 <p>Watch Bells · Traditional ship's bells for your computer</p>
                 <nav aria-label="Footer navigation">
                     <a href="/">Home</a>
-                    <a href="https://gitlab.com/euan/watch-bells">Source</a>
-                    <a href="https://gitlab.com/euan/watch-bells/releases">Releases</a>
+                    <a href="https://github.com/euan-reid/watch-bells">Source</a>
+                    <a href="https://github.com/euan-reid/watch-bells/releases">Releases</a>
                 </nav>
             </div>
         </footer>

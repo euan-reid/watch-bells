@@ -1,0 +1,515 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watch-bells-release-publication
+  cancel-in-progress: false
+
+env:
+  LINUX_AARCH64_ARTIFACT: watch-bells-linux-aarch64
+  LINUX_X86_64_ARTIFACT: watch-bells-linux-x86_64
+  MACOS_ARTIFACT: watch-bells-macos-universal.zip
+  WINDOWS_ARTIFACT: watch-bells-windows-x86_64.exe
+
+jobs:
+  validate:
+    name: Validate release and quality
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require release commit to belong to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          tagged_commit="$(git rev-parse 'HEAD^{commit}')"
+          if ! git merge-base --is-ancestor "$tagged_commit" origin/main; then
+            echo "Tagged commit $tagged_commit is not part of canonical main history." >&2
+            exit 1
+          fi
+          echo "Tagged commit $tagged_commit belongs to canonical main history."
+
+      - name: Match tag to Cargo package version
+        id: version
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$TAG_NAME" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Release tags must use the established stable-semver form, for example 0.7.0." >&2
+            exit 1
+          fi
+
+          package_version="$(
+            cargo metadata --locked --no-deps --format-version 1 |
+              jq -r '.packages[] | select(.name == "watch-bells") | .version'
+          )"
+          if [[ -z "$package_version" || "$package_version" != "$TAG_NAME" ]]; then
+            echo "Tag $TAG_NAME does not match Cargo package version $package_version." >&2
+            exit 1
+          fi
+
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Run workspace Clippy
+        run: cargo clippy --workspace --locked --all-targets -- -D warnings
+
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.architecture }}, ${{ matrix.environment }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            architecture: x86-64
+            environment: Ubuntu 22.04
+            runner: ubuntu-22.04
+            expected_host: x86_64-unknown-linux-gnu
+            artifact_name: final-linux-x86_64
+            artifact_path: dist/watch-bells-linux-x86_64
+            output_name: watch-bells-linux-x86_64
+            retention_days: 7
+          - platform: Linux
+            architecture: ARM64
+            environment: Ubuntu 22.04
+            runner: ubuntu-22.04-arm
+            expected_host: aarch64-unknown-linux-gnu
+            artifact_name: final-linux-aarch64
+            artifact_path: dist/watch-bells-linux-aarch64
+            output_name: watch-bells-linux-aarch64
+            retention_days: 7
+          - platform: Windows
+            architecture: x86-64
+            environment: Windows 2025
+            runner: windows-2025
+            expected_host: x86_64-pc-windows-msvc
+            artifact_name: final-windows-x86_64
+            artifact_path: dist/watch-bells-windows-x86_64.exe
+            output_name: watch-bells-windows-x86_64.exe
+            retention_days: 7
+          - platform: macOS
+            architecture: ARM64
+            environment: macOS 15
+            runner: macos-15
+            expected_host: aarch64-apple-darwin
+            artifact_name: intermediate-macos-arm64
+            artifact_path: target/release/watch-bells
+            deployment_target: '11.0'
+            macos_architecture: arm64
+            retention_days: 2
+          - platform: macOS
+            architecture: x86-64
+            environment: macOS 15 Intel
+            runner: macos-15-intel
+            expected_host: x86_64-apple-darwin
+            artifact_name: intermediate-macos-x86_64
+            artifact_path: target/release/watch-bells
+            deployment_target: '10.13'
+            macos_architecture: x86_64
+            retention_days: 2
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Verify native Rust host
+        shell: bash
+        env:
+          EXPECTED_HOST: ${{ matrix.expected_host }}
+        run: |
+          set -euo pipefail
+          rustc -vV
+          actual_host="$(rustc -vV | sed -n 's/^host: //p')"
+          if [[ "$actual_host" != "$EXPECTED_HOST" ]]; then
+            echo "Expected native Rust host $EXPECTED_HOST; found $actual_host." >&2
+            exit 1
+          fi
+
+      - name: Build native release executable
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+        run: cargo build --locked --release
+
+      - name: Verify native macOS executable
+        if: matrix.platform == 'macOS'
+        shell: bash
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.macos_architecture }}
+          EXPECTED_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+        run: |
+          set -euo pipefail
+          executable=target/release/watch-bells
+          architectures="$(lipo -archs "$executable")"
+          build_information="$(vtool -show-build "$executable")"
+          lipo -info "$executable"
+          echo "$build_information"
+          if [[ "$architectures" != "$EXPECTED_ARCHITECTURE" ]]; then
+            echo "Expected only $EXPECTED_ARCHITECTURE, found $architectures." >&2
+            exit 1
+          fi
+          if ! grep -Eq \
+            "^[[:space:]]+(minos|version) $EXPECTED_DEPLOYMENT_TARGET$" \
+            <<< "$build_information"; then
+            echo "Expected minimum macOS $EXPECTED_DEPLOYMENT_TARGET." >&2
+            exit 1
+          fi
+
+      - name: Stage final Linux executable
+        if: matrix.platform == 'Linux'
+        shell: bash
+        env:
+          OUTPUT_NAME: ${{ matrix.output_name }}
+        run: |
+          mkdir -p dist
+          install -m 755 target/release/watch-bells "dist/$OUTPUT_NAME"
+
+      - name: Stage final Windows executable
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        env:
+          OUTPUT_NAME: ${{ matrix.output_name }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/watch-bells.exe "dist/$env:OUTPUT_NAME"
+
+      - name: Upload native release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+          retention-days: ${{ matrix.retention_days }}
+
+  package-macos:
+    name: Package universal macOS application
+    needs:
+      - validate
+      - build
+    runs-on: macos-15
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download Apple-silicon executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: intermediate-macos-arm64
+          path: dist/macos-arm64
+
+      - name: Download Intel executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: intermediate-macos-x86_64
+          path: dist/macos-x86_64
+
+      - name: Build and verify universal application bundle
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          cargo xtask package-macos \
+            --arm64-binary dist/macos-arm64/watch-bells \
+            --x86_64-binary dist/macos-x86_64/watch-bells \
+            --out dist/macos-universal \
+            --version "$VERSION"
+
+      - name: Independently verify packaged application and ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip_path=dist/macos-universal/watch-bells-macos-universal.zip
+          unzip -tq "$zip_path"
+          verification_dir="$(mktemp -d)"
+          unzip -q "$zip_path" -d "$verification_dir"
+          app="$verification_dir/Watch Bells.app"
+          executable="$app/Contents/MacOS/watch-bells"
+          architectures="$(lipo -archs "$executable")"
+          lipo -info "$executable"
+
+          for required_architecture in arm64 x86_64; do
+            if [[ " $architectures " != *" $required_architecture "* ]]; then
+              echo "Missing $required_architecture slice: $architectures" >&2
+              exit 1
+            fi
+          done
+          read -r -a architecture_list <<< "$architectures"
+          if [[ "${#architecture_list[@]}" -ne 2 ]]; then
+            echo "Unexpected architecture set: $architectures" >&2
+            exit 1
+          fi
+
+          for specification in arm64:11.0 x86_64:10.13; do
+            architecture="${specification%%:*}"
+            deployment_target="${specification#*:}"
+            thin_binary="$verification_dir/watch-bells-$architecture"
+            lipo "$executable" -thin "$architecture" -output "$thin_binary"
+            build_information="$(vtool -show-build "$thin_binary")"
+            echo "$build_information"
+            if ! grep -Eq \
+              "^[[:space:]]+(minos|version) $deployment_target$" \
+              <<< "$build_information"; then
+              echo "Expected $architecture minimum macOS $deployment_target." >&2
+              exit 1
+            fi
+          done
+
+          plutil -lint "$app/Contents/Info.plist"
+          iconutil -c iconset "$app/Contents/Resources/WatchBells.icns" \
+            -o "$verification_dir/decoded.iconset"
+          codesign --verify --strict --verbose=2 "$executable"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      - name: Upload final universal macOS artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: final-macos-universal
+          path: dist/macos-universal/watch-bells-macos-universal.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish website downloads and GitHub Release
+    needs:
+      - validate
+      - build
+      - package-macos
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download Linux x86-64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: final-linux-x86_64
+          path: dist/release
+
+      - name: Download Linux ARM64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: final-linux-aarch64
+          path: dist/release
+
+      - name: Download Windows x86-64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: final-windows-x86_64
+          path: dist/release
+
+      - name: Download universal macOS artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: final-macos-universal
+          path: dist/release
+
+      - name: Validate final artifact set
+        run: cargo xtask validate-release --source dist/release
+
+      - name: Inspect existing GitHub Release
+        id: release-state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" \
+            >/dev/null 2>&1; then
+            echo "state=missing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          is_draft="$(
+            gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" \
+              --json isDraft --jq '.isDraft'
+          )"
+          if [[ "$is_draft" == "true" ]]; then
+            echo "state=draft" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=published" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or reuse draft GitHub Release
+        if: steps.release-state.outputs.state != 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_STATE: ${{ steps.release-state.outputs.state }}
+          TAG_NAME: ${{ github.ref_name }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          if [[ "$RELEASE_STATE" == "missing" ]]; then
+            gh release create "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --generate-notes \
+              --title "Watch Bells $VERSION" \
+              --verify-tag
+          else
+            echo "Reusing existing draft release for $TAG_NAME."
+          fi
+
+      - name: Upload all assets to draft GitHub Release
+        if: steps.release-state.outputs.state != 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release upload "$TAG_NAME" \
+            "dist/release/$MACOS_ARTIFACT" \
+            "dist/release/$WINDOWS_ARTIFACT" \
+            "dist/release/$LINUX_X86_64_ARTIFACT" \
+            "dist/release/$LINUX_AARCH64_ARTIFACT" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Validate GitHub Release asset set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected_assets="$(
+            printf '%s\n' \
+              "$MACOS_ARTIFACT" \
+              "$WINDOWS_ARTIFACT" \
+              "$LINUX_X86_64_ARTIFACT" \
+              "$LINUX_AARCH64_ARTIFACT" |
+              sort
+          )"
+          actual_assets="$(
+            gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' |
+              sort
+          )"
+          if [[ "$actual_assets" != "$expected_assets" ]]; then
+            echo "GitHub Release assets do not match the required set." >&2
+            diff <(printf '%s\n' "$expected_assets") \
+              <(printf '%s\n' "$actual_assets") || true
+            exit 1
+          fi
+
+      - name: Create current main worktree
+        run: |
+          set -euo pipefail
+          # Keep the tagged checkout intact so every cargo xtask invocation uses
+          # release logic from the tag, while website changes use current main.
+          git fetch --no-tags origin +main:refs/remotes/origin/main
+          git worktree add --detach "$RUNNER_TEMP/watch-bells-main" origin/main
+
+      - name: Verify website copy for an already-published release
+        if: steps.release-state.outputs.state == 'published'
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          cargo xtask validate-release \
+            --source "$RUNNER_TEMP/watch-bells-main/website/public/downloads/$VERSION"
+          echo "Release $VERSION is already complete; no publication changes are needed."
+
+      - name: Populate versioned and latest website downloads
+        if: steps.release-state.outputs.state != 'published'
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          cargo xtask publish-downloads \
+            --source dist/release \
+            --website "$RUNNER_TEMP/watch-bells-main/website/public/downloads" \
+            --version "$VERSION"
+
+      - name: Commit and push generated website downloads
+        if: steps.release-state.outputs.state != 'published'
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          main_checkout="$RUNNER_TEMP/watch-bells-main"
+          git -C "$main_checkout" config user.name "github-actions[bot]"
+          git -C "$main_checkout" config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$main_checkout" add --all -- \
+            "website/public/downloads/$VERSION" \
+            website/public/downloads/latest
+
+          while IFS= read -r staged_path; do
+            case "$staged_path" in
+              "website/public/downloads/$VERSION/"* | \
+                website/public/downloads/latest/*)
+                ;;
+              *)
+                echo "Refusing to commit unexpected path: $staged_path" >&2
+                exit 1
+                ;;
+            esac
+          done < <(git -C "$main_checkout" diff --cached --name-only)
+
+          if git -C "$main_checkout" diff --cached --quiet; then
+            echo "Website downloads already contain release $VERSION."
+          else
+            git -C "$main_checkout" commit \
+              -m "chore(downloads): publish $VERSION binaries"
+            # GITHUB_TOKEN pushes do not recursively start another Actions run.
+            git -C "$main_checkout" push origin HEAD:main
+          fi
+
+      - name: Publish GitHub Release
+        if: steps.release-state.outputs.state != 'published'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release edit "$TAG_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            --latest

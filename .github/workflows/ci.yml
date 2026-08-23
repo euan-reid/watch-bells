@@ -1,0 +1,312 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Application change detection
+    runs-on: ubuntu-24.04
+    outputs:
+      application: ${{ steps.detect.outputs.application }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect application changes
+        id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "application=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            compare_from="$BASE_SHA"
+          elif [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo "application=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            compare_from="$BEFORE_SHA"
+          fi
+
+          changed_files="$(git diff --name-only "$compare_from" "$GITHUB_SHA" -- \
+            .cargo \
+            .github/workflows/ci.yml \
+            .github/workflows/release.yml \
+            .pre-commit-config.yaml \
+            Cargo.lock \
+            Cargo.toml \
+            rust-toolchain.toml \
+            assets \
+            src \
+            xtask)"
+
+          if [[ -n "$changed_files" ]]; then
+            echo "Application-related changes:"
+            echo "$changed_files"
+            echo "application=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No application-related changes."
+            echo "application=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  quality:
+    name: Format, test, and Clippy
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+      - name: Run workspace Clippy
+        run: cargo clippy --workspace --locked --all-targets -- -D warnings
+
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.architecture }}, ${{ matrix.environment }})
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            architecture: x86-64
+            environment: Ubuntu 22.04
+            purpose: release-baseline compatibility
+            runner: ubuntu-22.04
+            expected_host: x86_64-unknown-linux-gnu
+          - platform: Linux
+            architecture: ARM64
+            environment: Ubuntu 22.04
+            purpose: release-baseline compatibility
+            runner: ubuntu-22.04-arm
+            expected_host: aarch64-unknown-linux-gnu
+          - platform: Linux
+            architecture: x86-64
+            environment: Ubuntu 24.04
+            purpose: current Ubuntu compatibility
+            runner: ubuntu-24.04
+            expected_host: x86_64-unknown-linux-gnu
+          - platform: Linux
+            architecture: ARM64
+            environment: Ubuntu 24.04
+            purpose: current Ubuntu compatibility
+            runner: ubuntu-24.04-arm
+            expected_host: aarch64-unknown-linux-gnu
+          - platform: Windows
+            architecture: x86-64
+            environment: Windows 2025
+            purpose: supported Windows build
+            runner: windows-2025
+            expected_host: x86_64-pc-windows-msvc
+          - platform: macOS
+            architecture: ARM64
+            environment: macOS 15
+            purpose: Apple-silicon build
+            runner: macos-15
+            expected_host: aarch64-apple-darwin
+            deployment_target: '11.0'
+            macos_artifact: ci-macos-arm64
+            macos_architecture: arm64
+          - platform: macOS
+            architecture: x86-64
+            environment: macOS 15 Intel
+            purpose: Intel build
+            runner: macos-15-intel
+            expected_host: x86_64-apple-darwin
+            deployment_target: '10.13'
+            macos_artifact: ci-macos-x86_64
+            macos_architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Verify native Rust host
+        shell: bash
+        env:
+          EXPECTED_HOST: ${{ matrix.expected_host }}
+          PURPOSE: ${{ matrix.purpose }}
+        run: |
+          set -euo pipefail
+          rustc -vV
+          actual_host="$(rustc -vV | sed -n 's/^host: //p')"
+          if [[ "$actual_host" != "$EXPECTED_HOST" ]]; then
+            echo "Expected native Rust host $EXPECTED_HOST for $PURPOSE; found $actual_host." >&2
+            exit 1
+          fi
+
+      - name: Build Watch Bells
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+        run: cargo build --locked --release
+
+      - name: Verify native macOS executable
+        if: matrix.platform == 'macOS'
+        shell: bash
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.macos_architecture }}
+          EXPECTED_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+        run: |
+          set -euo pipefail
+          executable=target/release/watch-bells
+          architectures="$(lipo -archs "$executable")"
+          build_information="$(vtool -show-build "$executable")"
+          lipo -info "$executable"
+          echo "$build_information"
+          if [[ "$architectures" != "$EXPECTED_ARCHITECTURE" ]]; then
+            echo "Expected only $EXPECTED_ARCHITECTURE, found $architectures." >&2
+            exit 1
+          fi
+          if ! grep -Eq \
+            "^[[:space:]]+(minos|version) $EXPECTED_DEPLOYMENT_TARGET$" \
+            <<< "$build_information"; then
+            echo "Expected minimum macOS $EXPECTED_DEPLOYMENT_TARGET." >&2
+            exit 1
+          fi
+
+      - name: Upload intermediate macOS executable
+        if: matrix.platform == 'macOS'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.macos_artifact }}
+          path: target/release/watch-bells
+          if-no-files-found: error
+          retention-days: 1
+
+  package-macos:
+    name: Package universal macOS application
+    needs:
+      - changes
+      - build
+    if: needs.changes.outputs.application == 'true'
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download Apple-silicon executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ci-macos-arm64
+          path: dist/macos-arm64
+
+      - name: Download Intel executable
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ci-macos-x86_64
+          path: dist/macos-x86_64
+
+      - name: Build and verify universal application bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(
+            cargo metadata --locked --no-deps --format-version 1 |
+              jq -r '.packages[] | select(.name == "watch-bells") | .version'
+          )"
+          cargo xtask package-macos \
+            --arm64-binary dist/macos-arm64/watch-bells \
+            --x86_64-binary dist/macos-x86_64/watch-bells \
+            --out dist/macos-universal \
+            --version "$version"
+
+      - name: Independently verify packaged application and ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip_path=dist/macos-universal/watch-bells-macos-universal.zip
+          unzip -tq "$zip_path"
+          verification_dir="$(mktemp -d)"
+          unzip -q "$zip_path" -d "$verification_dir"
+          app="$verification_dir/Watch Bells.app"
+          executable="$app/Contents/MacOS/watch-bells"
+          architectures="$(lipo -archs "$executable")"
+          lipo -info "$executable"
+
+          for required_architecture in arm64 x86_64; do
+            if [[ " $architectures " != *" $required_architecture "* ]]; then
+              echo "Missing $required_architecture slice: $architectures" >&2
+              exit 1
+            fi
+          done
+          read -r -a architecture_list <<< "$architectures"
+          if [[ "${#architecture_list[@]}" -ne 2 ]]; then
+            echo "Unexpected architecture set: $architectures" >&2
+            exit 1
+          fi
+
+          for specification in arm64:11.0 x86_64:10.13; do
+            architecture="${specification%%:*}"
+            deployment_target="${specification#*:}"
+            thin_binary="$verification_dir/watch-bells-$architecture"
+            lipo "$executable" -thin "$architecture" -output "$thin_binary"
+            build_information="$(vtool -show-build "$thin_binary")"
+            echo "$build_information"
+            if ! grep -Eq \
+              "^[[:space:]]+(minos|version) $deployment_target$" \
+              <<< "$build_information"; then
+              echo "Expected $architecture minimum macOS $deployment_target." >&2
+              exit 1
+            fi
+          done
+
+          plutil -lint "$app/Contents/Info.plist"
+          iconutil -c iconset "$app/Contents/Resources/WatchBells.icns" \
+            -o "$verification_dir/decoded.iconset"
+          codesign --verify --strict --verbose=2 "$executable"
+          codesign --verify --deep --strict --verbose=2 "$app"
