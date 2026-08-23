@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUSTUP_TOOLCHAIN: stable
+
+jobs:
+  changes:
+    name: Application change detection
+    runs-on: ubuntu-24.04
+    outputs:
+      application: ${{ steps.detect.outputs.application }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect application changes
+        id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "application=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            compare_from="$BASE_SHA"
+          elif [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            echo "application=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            compare_from="$BEFORE_SHA"
+          fi
+
+          changed_files="$(git diff --name-only "$compare_from" "$GITHUB_SHA" -- \
+            .cargo \
+            .github/workflows/ci.yml \
+            .github/workflows/release.yml \
+            .pre-commit-config.yaml \
+            Cargo.lock \
+            Cargo.toml \
+            assets \
+            src)"
+
+          if [[ -n "$changed_files" ]]; then
+            echo "Application-related changes:"
+            echo "$changed_files"
+            echo "application=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No application-related changes."
+            echo "application=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  quality:
+    name: Format, test, and Clippy
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Install Rust components
+        run: rustup component add clippy rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run tests
+        run: cargo test --locked
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  build-linux:
+    name: Build Linux (${{ matrix.architecture }})
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x86-64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - architecture: ARM64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Install Rust target
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
+
+      - name: Compile native release binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo build --locked --release --target "$TARGET"
+
+  build-windows:
+    name: Build Windows (x86-64 MSVC)
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
+    runs-on: windows-2025
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust target
+        run: rustup target add x86_64-pc-windows-msvc
+
+      - name: Compile native release executable
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc
+
+  build-macos:
+    name: Build macOS (${{ matrix.architecture }})
+    needs: changes
+    if: needs.changes.outputs.application == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: Apple silicon
+            runner: macos-15
+            target: aarch64-apple-darwin
+            deployment_target: '11.0'
+          - architecture: Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            deployment_target: '10.13'
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Rust target
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
+
+      - name: Compile native release executable
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
+          TARGET: ${{ matrix.target }}
+        run: cargo build --locked --release --target "$TARGET"
