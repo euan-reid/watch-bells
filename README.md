@@ -187,6 +187,8 @@ GitHub Release. See `.github/workflows/ci.yml` and
 
 ## Release History
 
+- 0.7.0
+  - Add persistent logging
 - 0.6.0
   - Bundle app as GUI application on Windows to avoid console window popping up
   - Bundle app as .app on macOS for easier installation and startup management
