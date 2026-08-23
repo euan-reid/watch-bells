@@ -6,12 +6,12 @@ use std::{
     io::{BufReader, Cursor},
     sync::mpsc::{self, RecvTimeoutError, Sender},
     thread::{self, JoinHandle},
-    time::Duration as StdDuration,
+    time::Duration,
 };
 
-use chrono::{DateTime, Duration as ChronoDuration, Local, Timelike};
+use chrono::{DateTime, Duration as ChronoDuration, Local, TimeZone, Timelike, Utc};
 use image::ImageFormat::Png as PngFormat;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rodio::{Decoder, DeviceSinkBuilder, Player};
 use rust_embed::RustEmbed;
 use tray_icon::{
@@ -113,29 +113,128 @@ fn watch_and_bells_for_time(dt: DateTime<Local>) -> ClockState {
     ClockState { watch, bells }
 }
 
-fn next_half_hour(now: DateTime<Local>) -> DateTime<Local> {
-    let truncated = now
-        .with_second(0)
-        .and_then(|dt| dt.with_nanosecond(0))
-        .expect("failed to truncate current time");
+const MAX_BELL_LATENESS: Duration = Duration::from_secs(5);
 
-    if truncated.minute() < 30 {
-        truncated
-            .with_minute(30)
-            .expect("failed to align to half-hour")
-    } else {
-        (truncated + ChronoDuration::hours(1))
-            .with_minute(0)
-            .expect("failed to align to top of hour")
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BoundaryStatus {
+    Fresh,
+    BeforeBoundary,
+    Stale,
+    InvalidLocalBoundary,
+}
+
+fn is_local_half_hour_boundary(boundary: DateTime<Utc>) -> bool {
+    let local = boundary.with_timezone(&Local);
+    if !((local.minute() == 0 || local.minute() == 30)
+        && local.second() == 0
+        && local.nanosecond() == 0)
+    {
+        return false;
+    }
+
+    // An ambiguous local civil time is not a unique boundary under the
+    // current timezone. Reject it rather than guessing which occurrence was
+    // intended after a DST or timezone change.
+    Local
+        .from_local_datetime(&local.naive_local())
+        .single()
+        .is_some_and(|resolved| resolved.with_timezone(&Utc) == boundary)
+}
+
+fn boundary_status(boundary: DateTime<Utc>, now: DateTime<Utc>) -> BoundaryStatus {
+    if !is_local_half_hour_boundary(boundary) {
+        return BoundaryStatus::InvalidLocalBoundary;
+    }
+
+    if now < boundary {
+        return BoundaryStatus::BeforeBoundary;
+    }
+
+    match (now - boundary).to_std() {
+        Ok(lateness) if lateness <= MAX_BELL_LATENESS => BoundaryStatus::Fresh,
+        _ => BoundaryStatus::Stale,
     }
 }
 
-fn duration_until(dt: DateTime<Local>) -> StdDuration {
-    let now = Local::now();
-    match (dt - now).to_std() {
-        Ok(duration) => duration,
-        Err(_) => StdDuration::ZERO,
+fn warn_boundary_rejection(
+    stage: &str,
+    boundary: DateTime<Utc>,
+    now: DateTime<Utc>,
+    status: BoundaryStatus,
+) {
+    match status {
+        BoundaryStatus::Fresh => (),
+        BoundaryStatus::BeforeBoundary => warn!(
+            "Skipping {stage} boundary before intended instant: expected={boundary}, now={now}"
+        ),
+        BoundaryStatus::Stale => {
+            warn!("Skipping stale {stage} boundary: expected={boundary}, now={now}")
+        }
+        BoundaryStatus::InvalidLocalBoundary => warn!(
+            "Skipping {stage} boundary invalidated by wall-clock/timezone change: expected={boundary}, now={now}"
+        ),
     }
+}
+
+fn claim_boundary(last_boundary: &mut Option<DateTime<Utc>>, boundary: DateTime<Utc>) -> bool {
+    if last_boundary.is_some_and(|last| boundary <= last) {
+        return false;
+    }
+
+    *last_boundary = Some(boundary);
+    true
+}
+
+fn next_half_hour<Tz>(now: DateTime<Tz>) -> Option<DateTime<Tz>>
+where
+    Tz: TimeZone,
+{
+    let truncated = now
+        .naive_local()
+        .with_second(0)
+        .and_then(|dt| dt.with_nanosecond(0))?;
+
+    let mut candidate = if truncated.minute() < 30 {
+        truncated.with_minute(30)?
+    } else {
+        (truncated + ChronoDuration::hours(1)).with_minute(0)?
+    };
+
+    // A local half-hour that is ambiguous or does not exist is not an
+    // appropriate scheduling instant. Skip it and continue to the next one.
+    for _ in 0..96 {
+        if let Some(candidate) = now.timezone().from_local_datetime(&candidate).single()
+            && candidate > now
+        {
+            return Some(candidate);
+        }
+
+        candidate = candidate.checked_add_signed(ChronoDuration::minutes(30))?;
+    }
+
+    None
+}
+
+fn duration_until(now: DateTime<Utc>, boundary: DateTime<Utc>) -> Duration {
+    (boundary - now).to_std().unwrap_or(Duration::ZERO)
+}
+
+fn audio_start_authorised(boundary: DateTime<Utc>, state: ClockState, now: DateTime<Utc>) -> bool {
+    let status = boundary_status(boundary, now);
+    if status != BoundaryStatus::Fresh {
+        warn_boundary_rejection("audio-start authorisation", boundary, now, status);
+        return false;
+    }
+
+    let boundary_state = watch_and_bells_for_time(boundary.with_timezone(&Local));
+    if boundary_state != state {
+        warn!(
+            "Skipping audio-start authorisation after clock state changed: expected={boundary}, now={now}"
+        );
+        return false;
+    }
+
+    true
 }
 
 #[derive(Debug)]
@@ -148,7 +247,10 @@ enum UserEvent {
 #[derive(Debug)]
 enum SchedulerEvent {
     Sync(ClockState),
-    Boundary(ClockState),
+    Boundary {
+        boundary: DateTime<Utc>,
+        state: ClockState,
+    },
 }
 
 enum SchedulerCommand {
@@ -165,6 +267,7 @@ struct App {
     tray_icon: Option<TrayIcon>,
     muted: bool,
     current_state: ClockState,
+    last_consumed_boundary: Option<DateTime<Utc>>,
     scheduler_tx: Option<Sender<SchedulerCommand>>,
     scheduler_handle: Option<JoinHandle<()>>,
 }
@@ -211,6 +314,7 @@ impl App {
             tray_icon: None,
             muted: false,
             current_state,
+            last_consumed_boundary: None,
             scheduler_tx: None,
             scheduler_handle: None,
         }
@@ -252,33 +356,57 @@ impl App {
                 return;
             }
 
-            let mut last_boundary_minute = None;
+            let mut last_scheduled_boundary = None;
 
             loop {
-                let next_boundary = next_half_hour(Local::now());
-                let timeout = duration_until(next_boundary);
+                let now = Utc::now();
+                let Some(next_boundary_local) = next_half_hour(now.with_timezone(&Local)) else {
+                    warn!("Unable to calculate the next local half-hour boundary; retrying");
+                    match scheduler_rx.recv_timeout(Duration::from_secs(60)) {
+                        Ok(SchedulerCommand::Quit) | Err(RecvTimeoutError::Disconnected) => break,
+                        Err(RecvTimeoutError::Timeout) => continue,
+                    }
+                };
+                let next_boundary = next_boundary_local.with_timezone(&Utc);
+                let timeout = duration_until(now, next_boundary);
 
                 match scheduler_rx.recv_timeout(timeout) {
                     Ok(SchedulerCommand::Quit) => break,
                     Err(RecvTimeoutError::Timeout) => {
-                        let now = Local::now();
-                        let current_minute = now.minute();
+                        let now = Utc::now();
+                        let status = boundary_status(next_boundary, now);
+                        if status != BoundaryStatus::Fresh {
+                            warn_boundary_rejection("scheduler", next_boundary, now, status);
 
-                        // Only fire boundary event if we're at a half-hour boundary (0 or 30)
-                        // and haven't already fired for this boundary (guard against sleep/wake edge cases)
-                        if (current_minute == 0 || current_minute == 30)
-                            && last_boundary_minute != Some(current_minute)
-                        {
-                            last_boundary_minute = Some(current_minute);
-                            let boundary_state = watch_and_bells_for_time(now);
+                            let current_state = watch_and_bells_for_time(now.with_timezone(&Local));
                             if event_proxy
-                                .send_event(UserEvent::Scheduler(SchedulerEvent::Boundary(
-                                    boundary_state,
+                                .send_event(UserEvent::Scheduler(SchedulerEvent::Sync(
+                                    current_state,
                                 )))
                                 .is_err()
                             {
                                 break;
                             }
+                            continue;
+                        }
+
+                        if !claim_boundary(&mut last_scheduled_boundary, next_boundary) {
+                            warn!(
+                                "Suppressing duplicate or non-monotonic scheduler boundary: boundary={next_boundary}"
+                            );
+                            continue;
+                        }
+
+                        let boundary_state =
+                            watch_and_bells_for_time(next_boundary.with_timezone(&Local));
+                        if event_proxy
+                            .send_event(UserEvent::Scheduler(SchedulerEvent::Boundary {
+                                boundary: next_boundary,
+                                state: boundary_state,
+                            }))
+                            .is_err()
+                        {
+                            break;
                         }
                     }
                     Err(RecvTimeoutError::Disconnected) => break,
@@ -317,13 +445,36 @@ impl App {
     fn handle_scheduler_event(&mut self, event: SchedulerEvent) {
         match event {
             SchedulerEvent::Sync(state) => self.apply_clock_state(state),
-            SchedulerEvent::Boundary(state) => {
-                self.apply_clock_state(state);
+            SchedulerEvent::Boundary { boundary, state } => {
+                let now = Utc::now();
+                let current_state = watch_and_bells_for_time(now.with_timezone(&Local));
+                self.apply_clock_state(current_state);
+
+                let status = boundary_status(boundary, now);
+                if status != BoundaryStatus::Fresh {
+                    warn_boundary_rejection("event-loop", boundary, now, status);
+                    return;
+                }
+
+                let boundary_state = watch_and_bells_for_time(boundary.with_timezone(&Local));
+                if state != current_state || state != boundary_state {
+                    warn!(
+                        "Skipping event-loop boundary after clock state changed: expected={boundary}, now={now}"
+                    );
+                    return;
+                }
+
+                if !claim_boundary(&mut self.last_consumed_boundary, boundary) {
+                    warn!(
+                        "Suppressing duplicate or non-monotonic boundary event: boundary={boundary}"
+                    );
+                    return;
+                }
 
                 if self.muted {
                     info!("Muted: skipping {} bells", state.bells);
                 } else {
-                    ring_bells(state.bells);
+                    ring_bells(boundary, state);
                 }
             }
         }
@@ -397,10 +548,9 @@ impl ApplicationHandler<UserEvent> for App {
     }
 }
 
-fn ring_bells(bells: u32) {
-    info!("Ringing {} bells", bells);
+fn ring_bells(boundary: DateTime<Utc>, state: ClockState) {
     thread::spawn(move || {
-        if let Err(err) = play_bells_audio(bells) {
+        if let Err(err) = play_bells_audio(boundary, state) {
             error!("Audio playback failed: {err}");
         }
     });
@@ -416,10 +566,23 @@ fn append_embedded_wav(player: &Player, asset_name: &str) -> Result<(), String> 
     Ok(())
 }
 
-fn play_bells_audio(bells: u32) -> Result<(), String> {
+fn play_bells_audio(boundary: DateTime<Utc>, state: ClockState) -> Result<(), String> {
+    if !audio_start_authorised(boundary, state, Utc::now()) {
+        return Ok(());
+    }
+
     let sink_handle = DeviceSinkBuilder::open_default_sink()
         .map_err(|err| format!("failed to open default audio output: {err}"))?;
 
+    // Opening an output device does not begin the sequence. Revalidate after
+    // opening it and immediately before appending the first chime.
+    if !audio_start_authorised(boundary, state, Utc::now()) {
+        return Ok(());
+    }
+
+    info!("Ringing {} bells", state.bells);
+
+    let bells = state.bells;
     let pairs = bells / 2;
     for _ in 0..pairs {
         let player = Player::connect_new(sink_handle.mixer());
@@ -471,6 +634,31 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Datelike, FixedOffset};
+
+    fn local_test_boundary() -> DateTime<Utc> {
+        Local::now()
+            .with_hour(12)
+            .and_then(|dt| dt.with_minute(0))
+            .and_then(|dt| dt.with_second(0))
+            .and_then(|dt| dt.with_nanosecond(0))
+            .expect("failed to construct local test boundary")
+            .with_timezone(&Utc)
+    }
+
+    fn fixed_time(hour: u32, minute: u32, second: u32) -> DateTime<FixedOffset> {
+        FixedOffset::east_opt(0)
+            .expect("failed to construct test offset")
+            .with_ymd_and_hms(2026, 1, 2, hour, minute, second)
+            .single()
+            .expect("failed to construct fixed test time")
+    }
+
+    fn next_boundary_utc(now: DateTime<Utc>) -> DateTime<Utc> {
+        next_half_hour(now.with_timezone(&Local))
+            .expect("failed to calculate next test boundary")
+            .with_timezone(&Utc)
+    }
 
     #[test]
     fn test_first_watch() {
@@ -656,38 +844,249 @@ mod tests {
     }
 
     #[test]
-    fn test_next_half_hour_at_top() {
-        let dt = Local::now()
-            .with_hour(10)
-            .and_then(|d| d.with_minute(0))
-            .and_then(|d| d.with_second(0))
-            .unwrap();
-        let next = next_half_hour(dt);
-        assert_eq!(next.minute(), 30);
+    fn exact_boundary_is_fresh() {
+        let boundary = local_test_boundary();
+        assert_eq!(boundary_status(boundary, boundary), BoundaryStatus::Fresh);
     }
 
     #[test]
-    fn test_next_half_hour_at_half() {
-        let dt = Local::now()
-            .with_hour(10)
-            .and_then(|d| d.with_minute(30))
-            .and_then(|d| d.with_second(0))
-            .unwrap();
-        let next = next_half_hour(dt);
-        assert_eq!(next.hour(), 11);
+    fn milliseconds_late_boundary_is_fresh() {
+        let boundary = local_test_boundary();
+        let now = boundary + ChronoDuration::milliseconds(50);
+        assert_eq!(boundary_status(boundary, now), BoundaryStatus::Fresh);
+    }
+
+    #[test]
+    fn boundary_just_inside_grace_period_is_fresh() {
+        let boundary = local_test_boundary();
+        let now = boundary + ChronoDuration::milliseconds(4_999);
+        assert_eq!(boundary_status(boundary, now), BoundaryStatus::Fresh);
+    }
+
+    #[test]
+    fn boundary_at_grace_period_limit_is_still_fresh() {
+        let boundary = local_test_boundary();
+        let now = boundary + ChronoDuration::seconds(5);
+        assert_eq!(boundary_status(boundary, now), BoundaryStatus::Fresh);
+    }
+
+    #[test]
+    fn boundary_just_outside_grace_period_is_stale() {
+        let boundary = local_test_boundary();
+        let now = boundary + ChronoDuration::milliseconds(5_001);
+        assert_eq!(boundary_status(boundary, now), BoundaryStatus::Stale);
+    }
+
+    #[test]
+    fn boundary_before_intended_instant_is_rejected() {
+        let boundary = local_test_boundary();
+        let now = boundary - ChronoDuration::milliseconds(1);
+        assert_eq!(
+            boundary_status(boundary, now),
+            BoundaryStatus::BeforeBoundary
+        );
+    }
+
+    #[test]
+    fn stale_scheduler_wake_is_rejected_and_resynchronises() {
+        let boundary = local_test_boundary();
+        let now = boundary + ChronoDuration::seconds(20);
+        assert_eq!(boundary_status(boundary, now), BoundaryStatus::Stale);
+
+        let next = next_boundary_utc(now);
+        assert!(next > now);
+    }
+
+    #[test]
+    fn stale_event_loop_delivery_is_rejected() {
+        let boundary = local_test_boundary();
+        let queued_until = boundary + ChronoDuration::minutes(42);
+        assert_eq!(
+            boundary_status(boundary, queued_until),
+            BoundaryStatus::Stale
+        );
+    }
+
+    #[test]
+    fn stale_audio_start_is_rejected() {
+        let boundary = local_test_boundary();
+        let audio_thread_now = boundary + ChronoDuration::seconds(6);
+        let state = watch_and_bells_for_time(boundary.with_timezone(&Local));
+        assert!(!audio_start_authorised(boundary, state, audio_thread_now));
+    }
+
+    #[test]
+    fn forward_clock_jump_skips_old_boundary_and_uses_future_boundary() {
+        let boundary = local_test_boundary();
+        let now = boundary + ChronoDuration::hours(2);
+        assert_eq!(boundary_status(boundary, now), BoundaryStatus::Stale);
+
+        let next = next_boundary_utc(now);
+        assert!(next > now);
+        assert_ne!(next, boundary);
+    }
+
+    #[test]
+    fn backward_clock_jump_rejects_old_authorisation() {
+        let boundary = local_test_boundary();
+        let now = boundary - ChronoDuration::seconds(1);
+        assert_eq!(
+            boundary_status(boundary, now),
+            BoundaryStatus::BeforeBoundary
+        );
+
+        let resynchronised = next_boundary_utc(now);
+        assert_eq!(resynchronised, boundary);
+        assert!(resynchronised > now);
+    }
+
+    #[test]
+    fn invalid_local_boundary_is_rejected_conservatively() {
+        let boundary = local_test_boundary() + ChronoDuration::minutes(1);
+        let now = boundary + ChronoDuration::seconds(1);
+        assert_eq!(
+            boundary_status(boundary, now),
+            BoundaryStatus::InvalidLocalBoundary
+        );
+    }
+
+    #[test]
+    fn duplicate_boundary_cannot_be_claimed_twice() {
+        let boundary = local_test_boundary();
+        let mut last_boundary = None;
+
+        assert!(claim_boundary(&mut last_boundary, boundary));
+        assert!(!claim_boundary(&mut last_boundary, boundary));
+        assert!(!claim_boundary(
+            &mut last_boundary,
+            boundary - ChronoDuration::minutes(30)
+        ));
+    }
+
+    #[test]
+    fn distinct_consecutive_boundaries_can_each_be_claimed() {
+        let first = local_test_boundary();
+        let second = first + ChronoDuration::minutes(30);
+        let mut last_boundary = None;
+
+        assert_eq!(boundary_status(first, first), BoundaryStatus::Fresh);
+        assert!(claim_boundary(&mut last_boundary, first));
+        assert_eq!(boundary_status(second, second), BoundaryStatus::Fresh);
+        assert!(claim_boundary(&mut last_boundary, second));
+    }
+
+    #[test]
+    fn stale_boundary_does_not_suppress_next_legitimate_boundary() {
+        let stale = local_test_boundary();
+        let next = stale + ChronoDuration::minutes(30);
+        let mut last_boundary = None;
+
+        assert_eq!(
+            boundary_status(stale, stale + ChronoDuration::seconds(20)),
+            BoundaryStatus::Stale
+        );
+        assert_eq!(boundary_status(next, next), BoundaryStatus::Fresh);
+        assert!(claim_boundary(&mut last_boundary, next));
+    }
+
+    #[test]
+    fn startup_shortly_after_boundary_schedules_only_a_future_boundary() {
+        let boundary = local_test_boundary();
+        let startup = boundary + ChronoDuration::seconds(3);
+        assert_eq!(boundary_status(boundary, startup), BoundaryStatus::Fresh);
+
+        let next = next_boundary_utc(startup);
+        assert!(next > startup);
+        assert_ne!(next, boundary);
+    }
+
+    #[test]
+    fn startup_away_from_boundary_schedules_only_a_future_boundary() {
+        let previous = local_test_boundary();
+        let startup = previous + ChronoDuration::minutes(17);
+
+        let next = next_boundary_utc(startup);
+        assert!(next > startup);
+        assert_ne!(next, previous);
+    }
+
+    #[test]
+    fn next_half_hour_handles_representative_local_times() {
+        let cases = [
+            (fixed_time(0, 0, 0), 0, 30, 2),
+            (fixed_time(10, 0, 0), 10, 30, 2),
+            (fixed_time(10, 29, 59), 10, 30, 2),
+            (fixed_time(10, 30, 0), 11, 0, 2),
+            (fixed_time(10, 59, 30), 11, 0, 2),
+            (fixed_time(23, 59, 59), 0, 0, 3),
+        ];
+
+        for (now, expected_hour, expected_minute, expected_day) in cases {
+            let next = next_half_hour(now).expect("failed to find next half-hour");
+            assert!(next > now);
+            assert_eq!(next.hour(), expected_hour);
+            assert_eq!(next.minute(), expected_minute);
+            assert_eq!(next.day(), expected_day);
+            assert_eq!(next.second(), 0);
+            assert_eq!(next.nanosecond(), 0);
+        }
+    }
+
+    #[test]
+    fn next_half_hour_skips_a_local_dst_gap_when_the_host_has_one() {
+        let Some(before_gap) = Local.with_ymd_and_hms(2026, 3, 8, 1, 59, 0).single() else {
+            return;
+        };
+
+        if Local
+            .with_ymd_and_hms(2026, 3, 8, 2, 0, 0)
+            .single()
+            .is_some()
+        {
+            return;
+        }
+
+        let next = next_half_hour(before_gap).expect("failed to skip local DST gap");
+        assert_eq!(next.hour(), 3);
         assert_eq!(next.minute(), 0);
     }
 
     #[test]
-    fn test_next_half_hour_at_59_minutes() {
-        let dt = Local::now()
-            .with_hour(10)
-            .and_then(|d| d.with_minute(59))
-            .and_then(|d| d.with_second(30))
-            .unwrap();
-        let next = next_half_hour(dt);
-        // Should round down to hour:00 (already past :30), then add 1 hour → 11:00
-        assert_eq!(next.hour(), 11);
-        assert_eq!(next.minute(), 0);
+    fn next_half_hour_skips_an_ambiguous_local_dst_time_when_the_host_has_one() {
+        let Some(before_fallback) = Local.with_ymd_and_hms(2026, 11, 1, 0, 59, 0).single() else {
+            return;
+        };
+
+        if Local
+            .with_ymd_and_hms(2026, 11, 1, 1, 0, 0)
+            .single()
+            .is_some()
+        {
+            return;
+        }
+
+        let next = next_half_hour(before_fallback).expect("failed to skip ambiguous DST time");
+        assert_eq!(next.hour(), 2);
+        assert!(next.minute() == 0 || next.minute() == 30);
+        assert!(
+            Local
+                .from_local_datetime(&next.naive_local())
+                .single()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn ambiguous_local_boundary_is_not_authorised_when_the_host_has_one() {
+        let ambiguous = Local.with_ymd_and_hms(2026, 11, 1, 1, 0, 0);
+        if ambiguous.single().is_some() {
+            return;
+        }
+
+        let boundary = ambiguous
+            .earliest()
+            .expect("failed to construct ambiguous local boundary")
+            .with_timezone(&Utc);
+        assert!(!is_local_half_hour_boundary(boundary));
     }
 }
