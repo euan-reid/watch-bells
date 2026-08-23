@@ -9,7 +9,10 @@ use std::{
     time::Duration,
 };
 
-use chrono::{DateTime, Duration as ChronoDuration, Local, TimeZone, Timelike, Utc};
+use chrono::{
+    DateTime, Duration as ChronoDuration, Local, LocalResult, NaiveDateTime, TimeZone, Timelike,
+    Utc,
+};
 use image::ImageFormat::Png as PngFormat;
 use log::{debug, error, info, warn};
 use rodio::{Decoder, DeviceSinkBuilder, Player};
@@ -125,6 +128,18 @@ enum BoundaryStatus {
 
 fn is_local_half_hour_boundary(boundary: DateTime<Utc>) -> bool {
     let local = boundary.with_timezone(&Local);
+    is_unique_half_hour_boundary_with(boundary, local, |naive| Local.from_local_datetime(naive))
+}
+
+fn is_unique_half_hour_boundary_with<Tz, F>(
+    boundary: DateTime<Utc>,
+    local: DateTime<Tz>,
+    resolve: F,
+) -> bool
+where
+    Tz: TimeZone,
+    F: FnOnce(&NaiveDateTime) -> LocalResult<DateTime<Tz>>,
+{
     if !((local.minute() == 0 || local.minute() == 30)
         && local.second() == 0
         && local.nanosecond() == 0)
@@ -135,8 +150,7 @@ fn is_local_half_hour_boundary(boundary: DateTime<Utc>) -> bool {
     // An ambiguous local civil time is not a unique boundary under the
     // current timezone. Reject it rather than guessing which occurrence was
     // intended after a DST or timezone change.
-    Local
-        .from_local_datetime(&local.naive_local())
+    resolve(&local.naive_local())
         .single()
         .is_some_and(|resolved| resolved.with_timezone(&Utc) == boundary)
 }
@@ -185,26 +199,37 @@ fn claim_boundary(last_boundary: &mut Option<DateTime<Utc>>, boundary: DateTime<
     true
 }
 
+fn next_half_hour_naive(now: NaiveDateTime) -> Option<NaiveDateTime> {
+    let truncated = now.with_second(0).and_then(|dt| dt.with_nanosecond(0))?;
+
+    Some(if truncated.minute() < 30 {
+        truncated.with_minute(30)?
+    } else {
+        (truncated + ChronoDuration::hours(1)).with_minute(0)?
+    })
+}
+
 fn next_half_hour<Tz>(now: DateTime<Tz>) -> Option<DateTime<Tz>>
 where
     Tz: TimeZone,
 {
-    let truncated = now
-        .naive_local()
-        .with_second(0)
-        .and_then(|dt| dt.with_nanosecond(0))?;
+    next_half_hour_with(&now, |candidate| {
+        now.timezone().from_local_datetime(candidate)
+    })
+}
 
-    let mut candidate = if truncated.minute() < 30 {
-        truncated.with_minute(30)?
-    } else {
-        (truncated + ChronoDuration::hours(1)).with_minute(0)?
-    };
+fn next_half_hour_with<Tz, F>(now: &DateTime<Tz>, mut resolve: F) -> Option<DateTime<Tz>>
+where
+    Tz: TimeZone,
+    F: FnMut(&NaiveDateTime) -> LocalResult<DateTime<Tz>>,
+{
+    let mut candidate = next_half_hour_naive(now.naive_local())?;
 
     // A local half-hour that is ambiguous or does not exist is not an
     // appropriate scheduling instant. Skip it and continue to the next one.
     for _ in 0..96 {
-        if let Some(candidate) = now.timezone().from_local_datetime(&candidate).single()
-            && candidate > now
+        if let Some(candidate) = resolve(&candidate).single()
+            && is_after(&candidate, now)
         {
             return Some(candidate);
         }
@@ -213,6 +238,54 @@ where
     }
 
     None
+}
+
+fn is_after<Tz: TimeZone>(candidate: &DateTime<Tz>, now: &DateTime<Tz>) -> bool {
+    candidate > now
+}
+
+fn future_display_candidate<Tz: TimeZone>(
+    now: &DateTime<Tz>,
+    result: LocalResult<DateTime<Tz>>,
+) -> Option<DateTime<Tz>> {
+    match result {
+        LocalResult::Single(candidate) if is_after(&candidate, now) => Some(candidate),
+        LocalResult::Ambiguous(first, second) => [first, second]
+            .into_iter()
+            .filter(|candidate| is_after(candidate, now))
+            .min(),
+        LocalResult::Single(_) | LocalResult::None => None,
+    }
+}
+
+fn next_display_wake_with<Tz, F>(now: &DateTime<Tz>, mut resolve: F) -> Option<DateTime<Tz>>
+where
+    Tz: TimeZone,
+    F: FnMut(&NaiveDateTime) -> LocalResult<DateTime<Tz>>,
+{
+    let mut candidate = next_half_hour_naive(now.naive_local())?;
+
+    // Display synchronisation may use either concrete occurrence of an
+    // ambiguous local time. Audible authority continues to require `single()`
+    // through `next_half_hour()` and `boundary_status()`.
+    for _ in 0..96 {
+        if let Some(candidate) = future_display_candidate(now, resolve(&candidate)) {
+            return Some(candidate);
+        }
+
+        candidate = candidate.checked_add_signed(ChronoDuration::minutes(30))?;
+    }
+
+    None
+}
+
+fn next_display_wake<Tz>(now: DateTime<Tz>) -> Option<DateTime<Tz>>
+where
+    Tz: TimeZone,
+{
+    next_display_wake_with(&now, |candidate| {
+        now.timezone().from_local_datetime(candidate)
+    })
 }
 
 fn duration_until(now: DateTime<Utc>, boundary: DateTime<Utc>) -> Duration {
@@ -246,7 +319,7 @@ enum UserEvent {
 
 #[derive(Debug)]
 enum SchedulerEvent {
-    Sync(ClockState),
+    Sync,
     Boundary {
         boundary: DateTime<Utc>,
         state: ClockState,
@@ -348,9 +421,8 @@ impl App {
         let event_proxy = self.event_proxy.clone();
 
         let handle = thread::spawn(move || {
-            let initial_state = watch_and_bells_for_time(Local::now());
             if event_proxy
-                .send_event(UserEvent::Scheduler(SchedulerEvent::Sync(initial_state)))
+                .send_event(UserEvent::Scheduler(SchedulerEvent::Sync))
                 .is_err()
             {
                 return;
@@ -360,48 +432,66 @@ impl App {
 
             loop {
                 let now = Utc::now();
-                let Some(next_boundary_local) = next_half_hour(now.with_timezone(&Local)) else {
+                let local_now = now.with_timezone(&Local);
+                let Some(next_sync_local) = next_display_wake(local_now) else {
+                    warn!("Unable to calculate the next display synchronisation wake; retrying");
+                    match scheduler_rx.recv_timeout(Duration::from_secs(60)) {
+                        Ok(SchedulerCommand::Quit) | Err(RecvTimeoutError::Disconnected) => break,
+                        Err(RecvTimeoutError::Timeout) => continue,
+                    }
+                };
+                let Some(next_audible_boundary_local) = next_half_hour(local_now) else {
                     warn!("Unable to calculate the next local half-hour boundary; retrying");
                     match scheduler_rx.recv_timeout(Duration::from_secs(60)) {
                         Ok(SchedulerCommand::Quit) | Err(RecvTimeoutError::Disconnected) => break,
                         Err(RecvTimeoutError::Timeout) => continue,
                     }
                 };
-                let next_boundary = next_boundary_local.with_timezone(&Utc);
-                let timeout = duration_until(now, next_boundary);
+                let next_sync = next_sync_local.with_timezone(&Utc);
+                let next_audible_boundary = next_audible_boundary_local.with_timezone(&Utc);
+                let timeout = duration_until(now, next_sync);
 
                 match scheduler_rx.recv_timeout(timeout) {
                     Ok(SchedulerCommand::Quit) => break,
                     Err(RecvTimeoutError::Timeout) => {
                         let now = Utc::now();
-                        let status = boundary_status(next_boundary, now);
-                        if status != BoundaryStatus::Fresh {
-                            warn_boundary_rejection("scheduler", next_boundary, now, status);
+                        if event_proxy
+                            .send_event(UserEvent::Scheduler(SchedulerEvent::Sync))
+                            .is_err()
+                        {
+                            break;
+                        }
 
-                            let current_state = watch_and_bells_for_time(now.with_timezone(&Local));
-                            if event_proxy
-                                .send_event(UserEvent::Scheduler(SchedulerEvent::Sync(
-                                    current_state,
-                                )))
-                                .is_err()
+                        let status = boundary_status(next_audible_boundary, now);
+                        if status != BoundaryStatus::Fresh {
+                            // A display-only wake before the next unique boundary is
+                            // expected around a DST fallback. Other non-fresh states
+                            // represent a rejected or stale audible authorisation.
+                            if !(next_sync != next_audible_boundary
+                                && status == BoundaryStatus::BeforeBoundary)
                             {
-                                break;
+                                warn_boundary_rejection(
+                                    "scheduler",
+                                    next_audible_boundary,
+                                    now,
+                                    status,
+                                );
                             }
                             continue;
                         }
 
-                        if !claim_boundary(&mut last_scheduled_boundary, next_boundary) {
+                        if !claim_boundary(&mut last_scheduled_boundary, next_audible_boundary) {
                             warn!(
-                                "Suppressing duplicate or non-monotonic scheduler boundary: boundary={next_boundary}"
+                                "Suppressing duplicate or non-monotonic scheduler boundary: boundary={next_audible_boundary}"
                             );
                             continue;
                         }
 
                         let boundary_state =
-                            watch_and_bells_for_time(next_boundary.with_timezone(&Local));
+                            watch_and_bells_for_time(next_audible_boundary.with_timezone(&Local));
                         if event_proxy
                             .send_event(UserEvent::Scheduler(SchedulerEvent::Boundary {
-                                boundary: next_boundary,
+                                boundary: next_audible_boundary,
                                 state: boundary_state,
                             }))
                             .is_err()
@@ -444,7 +534,7 @@ impl App {
 
     fn handle_scheduler_event(&mut self, event: SchedulerEvent) {
         match event {
-            SchedulerEvent::Sync(state) => self.apply_clock_state(state),
+            SchedulerEvent::Sync => self.apply_clock_state(watch_and_bells_for_time(Local::now())),
             SchedulerEvent::Boundary { boundary, state } => {
                 let now = Utc::now();
                 let current_state = watch_and_bells_for_time(now.with_timezone(&Local));
@@ -652,6 +742,61 @@ mod tests {
             .with_ymd_and_hms(2026, 1, 2, hour, minute, second)
             .single()
             .expect("failed to construct fixed test time")
+    }
+
+    fn fixed_offset(hours: i32) -> FixedOffset {
+        FixedOffset::east_opt(hours * 60 * 60).expect("failed to construct test offset")
+    }
+
+    fn fallback_resolution(candidate: &NaiveDateTime) -> LocalResult<DateTime<FixedOffset>> {
+        let daylight = fixed_offset(-4);
+        let standard = fixed_offset(-5);
+
+        match (candidate.hour(), candidate.minute()) {
+            (1, 0) | (1, 30) => LocalResult::Ambiguous(
+                daylight
+                    .from_local_datetime(candidate)
+                    .single()
+                    .expect("failed to construct daylight fallback occurrence"),
+                standard
+                    .from_local_datetime(candidate)
+                    .single()
+                    .expect("failed to construct standard fallback occurrence"),
+            ),
+            _ if candidate.hour() >= 2 => LocalResult::Single(
+                standard
+                    .from_local_datetime(candidate)
+                    .single()
+                    .expect("failed to construct standard time"),
+            ),
+            _ => LocalResult::Single(
+                daylight
+                    .from_local_datetime(candidate)
+                    .single()
+                    .expect("failed to construct daylight time"),
+            ),
+        }
+    }
+
+    fn spring_gap_resolution(candidate: &NaiveDateTime) -> LocalResult<DateTime<FixedOffset>> {
+        let standard = fixed_offset(-5);
+        let daylight = fixed_offset(-4);
+
+        match candidate.hour() {
+            2 => LocalResult::None,
+            3.. => LocalResult::Single(
+                daylight
+                    .from_local_datetime(candidate)
+                    .single()
+                    .expect("failed to construct daylight time"),
+            ),
+            _ => LocalResult::Single(
+                standard
+                    .from_local_datetime(candidate)
+                    .single()
+                    .expect("failed to construct standard time"),
+            ),
+        }
     }
 
     fn next_boundary_utc(now: DateTime<Utc>) -> DateTime<Utc> {
@@ -1033,60 +1178,129 @@ mod tests {
     }
 
     #[test]
-    fn next_half_hour_skips_a_local_dst_gap_when_the_host_has_one() {
-        let Some(before_gap) = Local.with_ymd_and_hms(2026, 3, 8, 1, 59, 0).single() else {
-            return;
-        };
-
-        if Local
-            .with_ymd_and_hms(2026, 3, 8, 2, 0, 0)
+    fn explicit_dst_gap_skips_nonexistent_half_hours_for_scheduling() {
+        let standard = fixed_offset(-5);
+        let before_gap = standard
+            .with_ymd_and_hms(2026, 3, 8, 1, 59, 0)
             .single()
-            .is_some()
-        {
-            return;
-        }
+            .expect("failed to construct time before DST gap");
 
-        let next = next_half_hour(before_gap).expect("failed to skip local DST gap");
+        let next = next_half_hour_with(&before_gap, spring_gap_resolution)
+            .expect("failed to skip explicit DST gap");
         assert_eq!(next.hour(), 3);
         assert_eq!(next.minute(), 0);
+        assert_eq!(next.offset().local_minus_utc(), -4 * 60 * 60);
     }
 
     #[test]
-    fn next_half_hour_skips_an_ambiguous_local_dst_time_when_the_host_has_one() {
-        let Some(before_fallback) = Local.with_ymd_and_hms(2026, 11, 1, 0, 59, 0).single() else {
-            return;
-        };
+    fn explicit_dst_fallback_display_wake_progresses_through_repeated_hour() {
+        let daylight = fixed_offset(-4);
+        let standard = fixed_offset(-5);
+        let before_fallback = daylight
+            .with_ymd_and_hms(2026, 11, 1, 0, 30, 0)
+            .single()
+            .expect("failed to construct time before DST fallback");
 
-        if Local
+        let next_audible = next_half_hour_with(&before_fallback, fallback_resolution)
+            .expect("failed to find unique post-fallback boundary");
+        assert_eq!((next_audible.hour(), next_audible.minute()), (2, 0));
+        assert_eq!(next_audible.offset().local_minus_utc(), -5 * 60 * 60);
+
+        let first_hour = next_display_wake_with(&before_fallback, fallback_resolution)
+            .expect("failed to find first fallback display wake");
+        assert_eq!((first_hour.hour(), first_hour.minute()), (1, 0));
+        assert_eq!(first_hour.offset().local_minus_utc(), -4 * 60 * 60);
+
+        let first_half_hour = next_display_wake_with(
+            &(first_hour + ChronoDuration::seconds(1)),
+            fallback_resolution,
+        )
+        .expect("failed to find second fallback display wake");
+        assert_eq!((first_half_hour.hour(), first_half_hour.minute()), (1, 30));
+        assert_eq!(first_half_hour.offset().local_minus_utc(), -4 * 60 * 60);
+
+        let after_repeated_hour = next_display_wake_with(
+            &(first_half_hour + ChronoDuration::seconds(1)),
+            fallback_resolution,
+        )
+        .expect("failed to find post-fallback display wake");
+        assert_eq!(
+            (after_repeated_hour.hour(), after_repeated_hour.minute()),
+            (2, 0)
+        );
+        assert_eq!(after_repeated_hour.offset().local_minus_utc(), -5 * 60 * 60);
+
+        let second_occurrence = standard
             .with_ymd_and_hms(2026, 11, 1, 1, 0, 0)
             .single()
-            .is_some()
-        {
-            return;
-        }
-
-        let next = next_half_hour(before_fallback).expect("failed to skip ambiguous DST time");
-        assert_eq!(next.hour(), 2);
-        assert!(next.minute() == 0 || next.minute() == 30);
-        assert!(
-            Local
-                .from_local_datetime(&next.naive_local())
-                .single()
-                .is_some()
+            .expect("failed to construct repeated-hour occurrence");
+        let second_half_hour = next_display_wake_with(
+            &(second_occurrence + ChronoDuration::seconds(1)),
+            fallback_resolution,
+        )
+        .expect("failed to find repeated-hour display wake");
+        assert_eq!(
+            (second_half_hour.hour(), second_half_hour.minute()),
+            (1, 30)
         );
+        assert_eq!(second_half_hour.offset().local_minus_utc(), -5 * 60 * 60);
     }
 
     #[test]
-    fn ambiguous_local_boundary_is_not_authorised_when_the_host_has_one() {
-        let ambiguous = Local.with_ymd_and_hms(2026, 11, 1, 1, 0, 0);
-        if ambiguous.single().is_some() {
-            return;
+    fn explicit_dst_fallback_boundaries_remain_unauthorised() {
+        let daylight = fixed_offset(-4);
+        let standard = fixed_offset(-5);
+
+        for local in [
+            daylight
+                .with_ymd_and_hms(2026, 11, 1, 1, 0, 0)
+                .single()
+                .expect("failed to construct daylight 01:00"),
+            standard
+                .with_ymd_and_hms(2026, 11, 1, 1, 0, 0)
+                .single()
+                .expect("failed to construct standard 01:00"),
+            daylight
+                .with_ymd_and_hms(2026, 11, 1, 1, 30, 0)
+                .single()
+                .expect("failed to construct daylight 01:30"),
+            standard
+                .with_ymd_and_hms(2026, 11, 1, 1, 30, 0)
+                .single()
+                .expect("failed to construct standard 01:30"),
+        ] {
+            assert!(!is_unique_half_hour_boundary_with(
+                local.with_timezone(&Utc),
+                local,
+                fallback_resolution,
+            ));
         }
 
-        let boundary = ambiguous
-            .earliest()
-            .expect("failed to construct ambiguous local boundary")
-            .with_timezone(&Utc);
-        assert!(!is_local_half_hour_boundary(boundary));
+        let unique = standard
+            .with_ymd_and_hms(2026, 11, 1, 2, 0, 0)
+            .single()
+            .expect("failed to construct unique post-fallback boundary");
+        assert!(is_unique_half_hour_boundary_with(
+            unique.with_timezone(&Utc),
+            unique,
+            fallback_resolution,
+        ));
+    }
+
+    #[test]
+    fn explicit_dst_gap_does_not_produce_a_display_candidate_for_missing_time() {
+        let standard = fixed_offset(-5);
+        let before_gap = standard
+            .with_ymd_and_hms(2026, 3, 8, 1, 59, 0)
+            .single()
+            .expect("failed to construct time before DST gap");
+        let nonexistent = NaiveDateTime::new(
+            before_gap.date_naive(),
+            chrono::NaiveTime::from_hms_opt(2, 0, 0).expect("failed to construct gap time"),
+        );
+
+        assert!(
+            future_display_candidate(&before_gap, spring_gap_resolution(&nonexistent),).is_none()
+        );
     }
 }
