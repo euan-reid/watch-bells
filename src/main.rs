@@ -199,14 +199,18 @@ fn claim_boundary(last_boundary: &mut Option<DateTime<Utc>>, boundary: DateTime<
     true
 }
 
-fn next_half_hour_naive(now: NaiveDateTime) -> Option<NaiveDateTime> {
+fn half_hour_floor_naive(now: NaiveDateTime) -> Option<NaiveDateTime> {
     let truncated = now.with_second(0).and_then(|dt| dt.with_nanosecond(0))?;
 
-    Some(if truncated.minute() < 30 {
-        truncated.with_minute(30)?
+    if truncated.minute() < 30 {
+        truncated.with_minute(0)
     } else {
-        (truncated + ChronoDuration::hours(1)).with_minute(0)?
-    })
+        truncated.with_minute(30)
+    }
+}
+
+fn next_half_hour_naive(now: NaiveDateTime) -> Option<NaiveDateTime> {
+    half_hour_floor_naive(now)?.checked_add_signed(ChronoDuration::minutes(30))
 }
 
 fn next_half_hour<Tz>(now: DateTime<Tz>) -> Option<DateTime<Tz>>
@@ -244,6 +248,10 @@ fn is_after<Tz: TimeZone>(candidate: &DateTime<Tz>, now: &DateTime<Tz>) -> bool 
     candidate > now
 }
 
+fn is_before<Tz: TimeZone>(candidate: &DateTime<Tz>, other: &DateTime<Tz>) -> bool {
+    candidate < other
+}
+
 fn future_display_candidate<Tz: TimeZone>(
     now: &DateTime<Tz>,
     result: LocalResult<DateTime<Tz>>,
@@ -263,20 +271,27 @@ where
     Tz: TimeZone,
     F: FnMut(&NaiveDateTime) -> LocalResult<DateTime<Tz>>,
 {
-    let mut candidate = next_half_hour_naive(now.naive_local())?;
+    let floor = half_hour_floor_naive(now.naive_local())?;
+    let mut candidate = floor.checked_sub_signed(ChronoDuration::minutes(30))?;
+    let mut next_wake = None;
 
-    // Display synchronisation may use either concrete occurrence of an
-    // ambiguous local time. Audible authority continues to require `single()`
-    // through `next_half_hour()` and `boundary_status()`.
+    // Search from the preceding civil half-hour so a later concrete occurrence
+    // can be earlier in wall-clock terms, as during a DST fallback. Select the
+    // earliest absolute future occurrence rather than returning the first
+    // candidate in civil-time order.
     for _ in 0..96 {
-        if let Some(candidate) = future_display_candidate(now, resolve(&candidate)) {
-            return Some(candidate);
+        if let Some(candidate) = future_display_candidate(now, resolve(&candidate))
+            && next_wake
+                .as_ref()
+                .is_none_or(|current| is_before(&candidate, current))
+        {
+            next_wake = Some(candidate);
         }
 
         candidate = candidate.checked_add_signed(ChronoDuration::minutes(30))?;
     }
 
-    None
+    next_wake
 }
 
 fn next_display_wake<Tz>(now: DateTime<Tz>) -> Option<DateTime<Tz>>
@@ -1195,7 +1210,6 @@ mod tests {
     #[test]
     fn explicit_dst_fallback_display_wake_progresses_through_repeated_hour() {
         let daylight = fixed_offset(-4);
-        let standard = fixed_offset(-5);
         let before_fallback = daylight
             .with_ymd_and_hms(2026, 11, 1, 0, 30, 0)
             .single()
@@ -1219,31 +1233,31 @@ mod tests {
         assert_eq!((first_half_hour.hour(), first_half_hour.minute()), (1, 30));
         assert_eq!(first_half_hour.offset().local_minus_utc(), -4 * 60 * 60);
 
-        let after_repeated_hour = next_display_wake_with(
-            &(first_half_hour + ChronoDuration::seconds(1)),
-            fallback_resolution,
-        )
-        .expect("failed to find post-fallback display wake");
+        let second_hour = next_display_wake_with(&first_half_hour, fallback_resolution)
+            .expect("failed to find second fallback hour display wake");
+        assert_eq!((second_hour.hour(), second_hour.minute()), (1, 0));
+        assert_eq!(second_hour.offset().local_minus_utc(), -5 * 60 * 60);
+
+        let second_half_hour = next_display_wake_with(&second_hour, fallback_resolution)
+            .expect("failed to find repeated-hour display wake");
+        assert_eq!(
+            (second_half_hour.hour(), second_half_hour.minute()),
+            (1, 30)
+        );
+        assert_eq!(second_half_hour.offset().local_minus_utc(), -5 * 60 * 60);
+
+        let after_repeated_hour = next_display_wake_with(&second_half_hour, fallback_resolution)
+            .expect("failed to find post-fallback display wake");
         assert_eq!(
             (after_repeated_hour.hour(), after_repeated_hour.minute()),
             (2, 0)
         );
         assert_eq!(after_repeated_hour.offset().local_minus_utc(), -5 * 60 * 60);
 
-        let second_occurrence = standard
-            .with_ymd_and_hms(2026, 11, 1, 1, 0, 0)
-            .single()
-            .expect("failed to construct repeated-hour occurrence");
-        let second_half_hour = next_display_wake_with(
-            &(second_occurrence + ChronoDuration::seconds(1)),
-            fallback_resolution,
-        )
-        .expect("failed to find repeated-hour display wake");
-        assert_eq!(
-            (second_half_hour.hour(), second_half_hour.minute()),
-            (1, 30)
-        );
-        assert_eq!(second_half_hour.offset().local_minus_utc(), -5 * 60 * 60);
+        assert!(first_hour < first_half_hour);
+        assert!(first_half_hour < second_hour);
+        assert!(second_hour < second_half_hour);
+        assert!(second_half_hour < after_repeated_hour);
     }
 
     #[test]
