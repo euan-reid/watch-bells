@@ -16,12 +16,11 @@ env:
   LINUX_AARCH64_ARTIFACT: watch-bells-linux-aarch64
   LINUX_X86_64_ARTIFACT: watch-bells-linux-x86_64
   MACOS_ARTIFACT: watch-bells-macos-universal.zip
-  RUSTUP_TOOLCHAIN: stable
   WINDOWS_ARTIFACT: watch-bells-windows-x86_64.exe
 
 jobs:
-  validate-version:
-    name: Validate release version
+  validate:
+    name: Validate release and quality
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -29,7 +28,20 @@ jobs:
       - name: Check out release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Require release commit to belong to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          tagged_commit="$(git rev-parse 'HEAD^{commit}')"
+          if ! git merge-base --is-ancestor "$tagged_commit" origin/main; then
+            echo "Tagged commit $tagged_commit is not part of canonical main history." >&2
+            exit 1
+          fi
+          echo "Tagged commit $tagged_commit belongs to canonical main history."
 
       - name: Match tag to Cargo package version
         id: version
@@ -55,28 +67,6 @@ jobs:
 
           echo "version=$package_version" >> "$GITHUB_OUTPUT"
 
-  build-linux:
-    name: Build Linux (${{ matrix.architecture }})
-    needs: validate-version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - architecture: x86-64
-            runner: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            output_name: watch-bells-linux-x86_64
-          - architecture: ARM64
-            runner: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            output_name: watch-bells-linux-aarch64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Check out release tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update
@@ -88,79 +78,69 @@ jobs:
             libxkbcommon-dev \
             pkg-config
 
-      - name: Install Rust target
-        env:
-          TARGET: ${{ matrix.target }}
-        run: rustup target add "$TARGET"
+      - name: Check formatting
+        run: cargo fmt --check
 
-      - name: Build native release binary
-        env:
-          TARGET: ${{ matrix.target }}
-        run: cargo build --locked --release --target "$TARGET"
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
 
-      - name: Stage final release binary
-        env:
-          OUTPUT_NAME: ${{ matrix.output_name }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          mkdir -p dist
-          install -m 755 "target/$TARGET/release/watch-bells" "dist/$OUTPUT_NAME"
+      - name: Run workspace Clippy
+        run: cargo clippy --workspace --locked --all-targets -- -D warnings
 
-      - name: Upload final Linux artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: final-linux-${{ matrix.target }}
-          path: dist/${{ matrix.output_name }}
-          if-no-files-found: error
-          retention-days: 7
-
-  build-windows:
-    name: Build Windows (x86-64 MSVC)
-    needs: validate-version
-    runs-on: windows-2025
-    steps:
-      - name: Check out release tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install Rust target
-        run: rustup target add x86_64-pc-windows-msvc
-
-      - name: Build native release executable
-        run: cargo build --locked --release --target x86_64-pc-windows-msvc
-
-      - name: Stage final release executable
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/x86_64-pc-windows-msvc/release/watch-bells.exe dist/watch-bells-windows-x86_64.exe
-
-      - name: Upload final Windows artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: final-windows-x86_64
-          path: dist/watch-bells-windows-x86_64.exe
-          if-no-files-found: error
-          retention-days: 7
-
-  build-macos:
-    name: Build macOS (${{ matrix.architecture }})
-    needs: validate-version
+  build:
+    name: Build ${{ matrix.platform }} (${{ matrix.architecture }}, ${{ matrix.environment }})
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
         include:
-          - architecture: Apple silicon
-            artifact_architecture: arm64
+          - platform: Linux
+            architecture: x86-64
+            environment: Ubuntu 22.04
+            runner: ubuntu-22.04
+            expected_host: x86_64-unknown-linux-gnu
+            artifact_name: final-linux-x86_64
+            artifact_path: dist/watch-bells-linux-x86_64
+            output_name: watch-bells-linux-x86_64
+            retention_days: 7
+          - platform: Linux
+            architecture: ARM64
+            environment: Ubuntu 22.04
+            runner: ubuntu-22.04-arm
+            expected_host: aarch64-unknown-linux-gnu
+            artifact_name: final-linux-aarch64
+            artifact_path: dist/watch-bells-linux-aarch64
+            output_name: watch-bells-linux-aarch64
+            retention_days: 7
+          - platform: Windows
+            architecture: x86-64
+            environment: Windows 2025
+            runner: windows-2025
+            expected_host: x86_64-pc-windows-msvc
+            artifact_name: final-windows-x86_64
+            artifact_path: dist/watch-bells-windows-x86_64.exe
+            output_name: watch-bells-windows-x86_64.exe
+            retention_days: 7
+          - platform: macOS
+            architecture: ARM64
+            environment: macOS 15
             runner: macos-15
-            target: aarch64-apple-darwin
+            expected_host: aarch64-apple-darwin
+            artifact_name: intermediate-macos-arm64
+            artifact_path: target/release/watch-bells
             deployment_target: '11.0'
-          - architecture: Intel
-            artifact_architecture: x86_64
+            macos_architecture: arm64
+            retention_days: 2
+          - platform: macOS
+            architecture: x86-64
+            environment: macOS 15 Intel
             runner: macos-15-intel
-            target: x86_64-apple-darwin
+            expected_host: x86_64-apple-darwin
+            artifact_name: intermediate-macos-x86_64
+            artifact_path: target/release/watch-bells
             deployment_target: '10.13'
+            macos_architecture: x86_64
+            retention_days: 2
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out release tag
@@ -168,25 +148,45 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Rust target
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libasound2-dev \
+            libgtk-3-dev \
+            libxcb1-dev \
+            libxdo-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Verify native Rust host
+        shell: bash
         env:
-          TARGET: ${{ matrix.target }}
-        run: rustup target add "$TARGET"
+          EXPECTED_HOST: ${{ matrix.expected_host }}
+        run: |
+          set -euo pipefail
+          rustc -vV
+          actual_host="$(rustc -vV | sed -n 's/^host: //p')"
+          if [[ "$actual_host" != "$EXPECTED_HOST" ]]; then
+            echo "Expected native Rust host $EXPECTED_HOST; found $actual_host." >&2
+            exit 1
+          fi
 
       - name: Build native release executable
         env:
           MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
-          TARGET: ${{ matrix.target }}
-        run: cargo build --locked --release --target "$TARGET"
+        run: cargo build --locked --release
 
-      - name: Verify native architecture and deployment target
+      - name: Verify native macOS executable
+        if: matrix.platform == 'macOS'
+        shell: bash
         env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.macos_architecture }}
           EXPECTED_DEPLOYMENT_TARGET: ${{ matrix.deployment_target }}
-          EXPECTED_ARCHITECTURE: ${{ matrix.artifact_architecture }}
-          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          executable="target/$TARGET/release/watch-bells"
+          executable=target/release/watch-bells
           architectures="$(lipo -archs "$executable")"
           build_information="$(vtool -show-build "$executable")"
           lipo -info "$executable"
@@ -202,19 +202,37 @@ jobs:
             exit 1
           fi
 
-      - name: Upload intermediate macOS executable
+      - name: Stage final Linux executable
+        if: matrix.platform == 'Linux'
+        shell: bash
+        env:
+          OUTPUT_NAME: ${{ matrix.output_name }}
+        run: |
+          mkdir -p dist
+          install -m 755 target/release/watch-bells "dist/$OUTPUT_NAME"
+
+      - name: Stage final Windows executable
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        env:
+          OUTPUT_NAME: ${{ matrix.output_name }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/watch-bells.exe "dist/$env:OUTPUT_NAME"
+
+      - name: Upload native release artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: intermediate-macos-${{ matrix.artifact_architecture }}
-          path: target/${{ matrix.target }}/release/watch-bells
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_path }}
           if-no-files-found: error
-          retention-days: 2
+          retention-days: ${{ matrix.retention_days }}
 
   package-macos:
     name: Package universal macOS application
     needs:
-      - validate-version
-      - build-macos
+      - validate
+      - build
     runs-on: macos-15
     steps:
       - name: Check out release tag
@@ -236,27 +254,26 @@ jobs:
 
       - name: Build and verify universal application bundle
         env:
-          VERSION: ${{ needs.validate-version.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          cargo run --locked --release --bin xtask -- package-macos \
+          cargo xtask package-macos \
             --arm64-binary dist/macos-arm64/watch-bells \
             --x86_64-binary dist/macos-x86_64/watch-bells \
             --out dist/macos-universal \
             --version "$VERSION"
 
-      - name: Independently inspect packaged executable
+      - name: Independently verify packaged application and ZIP
+        shell: bash
         run: |
           set -euo pipefail
+          zip_path=dist/macos-universal/watch-bells-macos-universal.zip
+          unzip -tq "$zip_path"
           verification_dir="$(mktemp -d)"
-          unzip -q dist/macos-universal/watch-bells-macos-universal.zip \
-            -d "$verification_dir"
-          executable="$verification_dir/Watch Bells.app/Contents/MacOS/watch-bells"
+          unzip -q "$zip_path" -d "$verification_dir"
+          app="$verification_dir/Watch Bells.app"
+          executable="$app/Contents/MacOS/watch-bells"
           architectures="$(lipo -archs "$executable")"
           lipo -info "$executable"
-          plutil -lint "$verification_dir/Watch Bells.app/Contents/Info.plist"
-          iconutil -c iconset \
-            "$verification_dir/Watch Bells.app/Contents/Resources/WatchBells.icns" \
-            -o "$verification_dir/decoded.iconset"
 
           for required_architecture in arm64 x86_64; do
             if [[ " $architectures " != *" $required_architecture "* ]]; then
@@ -270,6 +287,27 @@ jobs:
             exit 1
           fi
 
+          for specification in arm64:11.0 x86_64:10.13; do
+            architecture="${specification%%:*}"
+            deployment_target="${specification#*:}"
+            thin_binary="$verification_dir/watch-bells-$architecture"
+            lipo "$executable" -thin "$architecture" -output "$thin_binary"
+            build_information="$(vtool -show-build "$thin_binary")"
+            echo "$build_information"
+            if ! grep -Eq \
+              "^[[:space:]]+(minos|version) $deployment_target$" \
+              <<< "$build_information"; then
+              echo "Expected $architecture minimum macOS $deployment_target." >&2
+              exit 1
+            fi
+          done
+
+          plutil -lint "$app/Contents/Info.plist"
+          iconutil -c iconset "$app/Contents/Resources/WatchBells.icns" \
+            -o "$verification_dir/decoded.iconset"
+          codesign --verify --strict --verbose=2 "$executable"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
       - name: Upload final universal macOS artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -281,9 +319,8 @@ jobs:
   publish:
     name: Publish website downloads and GitHub Release
     needs:
-      - validate-version
-      - build-linux
-      - build-windows
+      - validate
+      - build
       - package-macos
     runs-on: ubuntu-24.04
     permissions:
@@ -297,13 +334,13 @@ jobs:
       - name: Download Linux x86-64 artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: final-linux-x86_64-unknown-linux-gnu
+          name: final-linux-x86_64
           path: dist/release
 
       - name: Download Linux ARM64 artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: final-linux-aarch64-unknown-linux-gnu
+          name: final-linux-aarch64
           path: dist/release
 
       - name: Download Windows x86-64 artifact
@@ -318,12 +355,8 @@ jobs:
           name: final-macos-universal
           path: dist/release
 
-      - name: Compile release task and validate final artifact set
-        run: |
-          rustc --edition=2024 src/bin/xtask.rs \
-            --output "$RUNNER_TEMP/watch-bells-xtask"
-          "$RUNNER_TEMP/watch-bells-xtask" validate-release \
-            --source dist/release
+      - name: Validate final artifact set
+        run: cargo xtask validate-release --source dist/release
 
       - name: Inspect existing GitHub Release
         id: release-state
@@ -355,7 +388,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_STATE: ${{ steps.release-state.outputs.state }}
           TAG_NAME: ${{ github.ref_name }}
-          VERSION: ${{ needs.validate-version.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
           if [[ "$RELEASE_STATE" == "missing" ]]; then
             gh release create "$TAG_NAME" \
@@ -416,18 +449,18 @@ jobs:
       - name: Verify website copy for an already-published release
         if: steps.release-state.outputs.state == 'published'
         env:
-          VERSION: ${{ needs.validate-version.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          "$RUNNER_TEMP/watch-bells-xtask" validate-release \
+          cargo xtask validate-release \
             --source "website/public/downloads/$VERSION"
           echo "Release $VERSION is already complete; no publication changes are needed."
 
       - name: Populate versioned and latest website downloads
         if: steps.release-state.outputs.state != 'published'
         env:
-          VERSION: ${{ needs.validate-version.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          "$RUNNER_TEMP/watch-bells-xtask" publish-downloads \
+          cargo xtask publish-downloads \
             --source dist/release \
             --website website/public/downloads \
             --version "$VERSION"
@@ -435,7 +468,7 @@ jobs:
       - name: Commit and push generated website downloads
         if: steps.release-state.outputs.state != 'published'
         env:
-          VERSION: ${{ needs.validate-version.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
