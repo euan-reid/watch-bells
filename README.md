@@ -2,8 +2,7 @@
 
 > Computer time for seafarers
 
-[![pipeline status](https://gitlab.com/euan/watch-bells/badges/master/pipeline.svg)](https://gitlab.com/euan/watch-bells/commits/master)
-[![test coverage](https://gitlab.com/euan/watch-bells/badges/master/coverage.svg)](https://gitlab.com/euan/watch-bells/commits/master)
+[![CI](https://github.com/euan-reid/watch-bells/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/euan-reid/watch-bells/actions/workflows/ci.yml)
 
 Watch Bells makes your computer's time telling a little more nautical.
 The app sits in your system tray and rings maritime ship's bells every
@@ -14,20 +13,24 @@ half hour, just like a real ship's chronometer.
 Download the latest release binary for your platform (macOS, Linux, or Windows)
 from <https://www.watchbells.com/downloads/>, make it executable, and run it.
 On most systems, you can add it to your startup applications to run automatically.
+The same current release files are also available from
+[GitHub Releases](https://github.com/euan-reid/watch-bells/releases).
 
 ### Platform-Specific Notes
 
 **macOS:**
 
-- Requires macOS 10.13 or later
-- Download the macOS `.zip`, unzip it, and drag `Watch Bells.app` to
-  Applications if you want to keep it installed
+- The universal application supports both Apple silicon and Intel Macs
+- Requires macOS 11 or later on Apple silicon, or macOS 10.13 or later on Intel
+- Download the macOS `.zip`, unzip it, and drag `Watch Bells.app` to Applications
+  if you want to keep it installed
 - Tray icon will appear in the menu bar (top right) with no Dock icon
 - To run at startup, add the application to System Settings → General → Login Items
 - To see logs while testing, run it from Terminal or set `WATCH_BELLS_LOG=1`
 
 **Linux:**
 
+- Native downloads are available for x86-64 Intel/AMD and ARM64 systems
 - Requires pkg-config, GTK3, XCB, XKBCommon, and ALSA dev headers
 - Debian/Ubuntu:
 
@@ -47,7 +50,7 @@ On most systems, you can add it to your startup applications to run automaticall
 
 **Windows:**
 
-- Requires Windows 7 or later
+- Requires 64-bit Windows 10 or later on an Intel or AMD processor
 - Tray icon will appear in the system tray (bottom right)
 - The Windows build is packaged as a GUI app, so double-clicking it will not
   open a console window
@@ -59,7 +62,7 @@ Watch Bells is written in Rust for performance and cross-platform compatibility.
 
 ### Prerequisites
 
-- Rust 1.70+ (install via [rustup](https://rustup.rs/))
+- The current stable Rust toolchain (install via [rustup](https://rustup.rs/))
 - Git
 - Linux only: `libxcb1-dev`, `libxkbcommon-dev`, `libasound2-dev`
   (see Platform-Specific Notes above)
@@ -67,7 +70,7 @@ Watch Bells is written in Rust for performance and cross-platform compatibility.
 ### Building
 
 ```bash
-git clone https://gitlab.com/euan/watch-bells.git
+git clone https://github.com/euan-reid/watch-bells.git
 cd watch-bells
 cargo build --release
 ./target/release/watch-bells
@@ -81,7 +84,7 @@ The optimized release binary will be in `target/release/watch-bells`
 The project includes comprehensive unit tests for all watch schedules and bell calculations:
 
 ```bash
-cargo test --verbose
+cargo test --locked
 ```
 
 GUI launches stay quiet by default. If you want startup logs while running from
@@ -98,15 +101,33 @@ All tests verify:
 
 ### Packaging
 
-The macOS release flow lives in a reusable Cargo task:
+Release packaging and the website download layout live in a reusable Cargo task.
+The macOS command runs on macOS because it uses `lipo`, `sips`, and `ditto` to
+combine and package the two native executables:
 
 ```bash
-cargo build --release
-cargo run --bin xtask -- package-macos --binary target/release/watch-bells --out dist/macos --version <release-version>
-cargo run --bin xtask -- publish-downloads --source dist --website website/public/downloads --version <release-version>
+cargo run --locked --bin xtask -- package-macos \
+  --arm64-binary <aarch64-apple-darwin-executable> \
+  --x86_64-binary <x86_64-apple-darwin-executable> \
+  --out dist/macos-universal \
+  --version <release-version>
+cargo run --locked --bin xtask -- validate-release --source dist/release
+cargo run --locked --bin xtask -- publish-downloads \
+  --source dist/release \
+  --website website/public/downloads \
+  --version <release-version>
 ```
 
-Use your current version number when you want to stage release assets locally.
+`dist/release` must contain exactly the universal Mac ZIP, Windows x86-64
+executable, Linux x86-64 binary, and Linux ARM64 binary. Publication fails before
+changing the website tree if that set is incomplete or unexpected.
+
+The public release filenames are:
+
+- `watch-bells-macos-universal.zip`
+- `watch-bells-windows-x86_64.exe`
+- `watch-bells-linux-x86_64`
+- `watch-bells-linux-aarch64`
 
 ### Code Structure
 
@@ -116,17 +137,24 @@ The application uses an event-driven architecture:
 - **Scheduler thread (background):** Maintains precise half-hour
   boundary detection and triggers bell playback
 - **Audio playback:** Spawned on a background thread to keep the UI responsive
-- **Configuration:** All platform-specific settings in `.cargo/config.toml`
+- **Platform integration:** Selected at compile time through Rust target
+  configuration
 
 ### CI/CD
 
-The project uses GitLab CI for automated builds on all three platforms:
+The project uses GitHub Actions for ordinary validation and tagged releases.
+Application changes are checked with formatting, tests, and Clippy on Linux,
+then compiled natively for all five supported targets:
 
-- **Linux (x86-64):** Native build on latest Rust toolchain
-- **Windows (x86-64):** Cross-compiled from Linux using mingw-w64
-- **macOS (Apple Silicon):** Native build on hosted runner
+- **Linux:** x86-64 and ARM64
+- **Windows:** x86-64 with the MSVC toolchain
+- **macOS:** Apple silicon and Intel
 
-See `.gitlab-ci.yml` for build configuration.
+Tagged releases use the repository's established unprefixed semantic version
+format, such as `0.7.0`. Both Mac executables are combined into one universal
+`Watch Bells.app`; four final files are then published to the website download
+tree and to a GitHub Release. See `.github/workflows/ci.yml` and
+`.github/workflows/release.yml` for the complete configuration.
 
 ## Release History
 
@@ -143,7 +171,7 @@ See `.gitlab-ci.yml` for build configuration.
   - Real audio playback using system speakers (embedded WAV assets)
   - Comprehensive test suite (13 unit tests covering all watches and bell logic)
   - Optimized release binary: 3.6 MB on macOS with LTO + full optimization
-  - Multi-platform CI on GitLab.com hosted runners
+  - Multi-platform hosted CI
 - 0.4.1
   - Fix for Nore adjustments
 - 0.4.0
@@ -176,10 +204,12 @@ served by Cloudflare Workers Static Assets.
 - Versioned release binaries: `website/public/downloads/<tag>/`
 - Always-current binaries: `website/public/downloads/latest/`
 
-Tagged pipelines in GitLab CI run `package:website-downloads`, which copies
-release binaries into those `website/public/downloads/` folders and commits
-them back to the default branch for long-term storage before deployment (using
-`CI_JOB_TOKEN` push permissions).
+The tagged GitHub Actions release workflow copies the four final release files
+into those `website/public/downloads/` folders and commits them to `main` for
+long-term storage. Cloudflare Workers Builds deploys the static site separately;
+GitHub Actions contains no Cloudflare credentials or deployment step. The
+generated commit uses `GITHUB_TOKEN`, so it deliberately does not start another
+GitHub Actions workflow.
 
 Deploy from the `website/` folder:
 
@@ -197,8 +227,8 @@ Euan Reid – [@EuanReid](https://twitter.com/EuanReid)
 
 ## Contributing
 
-1. Fork the repo (<https://gitlab.com/euan/watch-bells/forks/new>)
-2. Create a feature branch (`git checkout -b feature-stuffed-crust`)
+1. Fork the repository (<https://github.com/euan-reid/watch-bells/fork>)
+2. Create a feature branch (`git switch -c feature-stuffed-crust`)
 3. Make some changes (`git commit -am 'Added stuffed crust'`)
 4. Push to your repo (`git push origin feature-stuffed-crust`)
-5. Create a new Merge Request (<https://gitlab.com/euan/watch-bells/merge_requests/new>)
+5. Create a pull request (<https://github.com/euan-reid/watch-bells/compare>)
