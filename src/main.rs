@@ -2,8 +2,8 @@
 
 use std::{
     env,
-    io::{BufReader, Cursor},
     io::IsTerminal,
+    io::{BufReader, Cursor},
     sync::mpsc::{self, RecvTimeoutError, Sender},
     thread::{self, JoinHandle},
     time::Duration as StdDuration,
