@@ -1,8 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
+mod logging;
+
 use std::{
-    env,
-    io::IsTerminal,
     io::{BufReader, Cursor},
     sync::mpsc::{self, RecvTimeoutError, Sender},
     thread::{self, JoinHandle},
@@ -703,18 +703,8 @@ fn play_bells_audio(boundary: DateTime<Utc>, state: ClockState) -> Result<(), St
     Ok(())
 }
 
-fn should_enable_logging() -> bool {
-    if env::var_os("WATCH_BELLS_LOG").is_some() {
-        return true;
-    }
-
-    std::io::stderr().is_terminal()
-}
-
 fn main() {
-    if should_enable_logging() {
-        simple_logger::init().expect("failed to initialize logger");
-    }
+    logging::initialise();
 
     let event_loop = EventLoop::<UserEvent>::with_user_event()
         .build()

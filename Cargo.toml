@@ -14,10 +14,9 @@ default-members = ["."]
 [dependencies]
 chrono = "0.4.44"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-log = "0.4.29"
+log = { version = "0.4.29", features = ["std"] }
 rodio = { version = "0.22.2", features = ["playback"] }
 rust-embed = "8.11.0"
-simple_logger = "5.2.0"
 tray-icon = "0.24.0"
 winit = "0.30"
 

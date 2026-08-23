@@ -26,7 +26,6 @@ The same current release files are also available from
   if you want to keep it installed
 - Tray icon will appear in the menu bar (top right) with no Dock icon
 - To run at startup, add the application to System Settings → General → Login Items
-- To see logs while testing, run it from Terminal or set `WATCH_BELLS_LOG=1`
 
 **Linux:**
 
@@ -56,6 +55,24 @@ The same current release files are also available from
 - The Windows build is packaged as a GUI app, so double-clicking it will not
   open a console window
 - To run at startup, create a shortcut in `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+
+### Logging
+
+Warnings and errors are automatically saved during ordinary GUI launches. The
+log is a plain-text forensic record: routine successful activity is deliberately
+not retained. Log locations are:
+
+- macOS: `~/Library/Logs/Watch Bells/watch-bells.log`
+- Windows: `%LOCALAPPDATA%\Watch Bells\watch-bells.log`
+- Linux: `$XDG_STATE_HOME/watch-bells/watch-bells.log`, or
+  `~/.local/state/watch-bells/watch-bells.log` when `XDG_STATE_HOME` is not set
+
+The current log is rotated at approximately 512 KiB, retaining one previous
+`watch-bells.old.log` generation. Rotation and logfile setup are best effort;
+they never prevent the application from running. When stderr is attached to a
+terminal, `INFO` and above are also printed there. Setting `WATCH_BELLS_LOG=1`
+enables `DEBUG` and above for interactive diagnostics, including GUI launches.
+Interactive verbosity is independent of the persistent warning/error log.
 
 ## Development
 
@@ -90,8 +107,9 @@ cargo test --workspace --locked
 cargo clippy --workspace --locked --all-targets -- -D warnings
 ```
 
-GUI launches stay quiet by default. If you want startup logs while running from
-Terminal, set `WATCH_BELLS_LOG=1`.
+GUI launches do not require stderr for diagnostics: warnings and errors are
+retained in the local logfile described above. Set `WATCH_BELLS_LOG=1` when
+debug-level interactive output is useful.
 
 All tests verify:
 
