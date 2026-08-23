@@ -62,7 +62,8 @@ Watch Bells is written in Rust for performance and cross-platform compatibility.
 
 ### Prerequisites
 
-- The current stable Rust toolchain (install via [rustup](https://rustup.rs/))
+- [rustup](https://rustup.rs/); the checked-in toolchain file selects stable
+  Rust with the formatting and Clippy components
 - Git
 - Linux only: `libxcb1-dev`, `libxkbcommon-dev`, `libasound2-dev`
   (see Platform-Specific Notes above)
@@ -84,7 +85,8 @@ The optimized release binary will be in `target/release/watch-bells`
 The project includes comprehensive unit tests for all watch schedules and bell calculations:
 
 ```bash
-cargo test --locked
+cargo test --workspace --locked
+cargo clippy --workspace --locked --all-targets -- -D warnings
 ```
 
 GUI launches stay quiet by default. If you want startup logs while running from
@@ -101,18 +103,21 @@ All tests verify:
 
 ### Packaging
 
-Release packaging and the website download layout live in a reusable Cargo task.
-The macOS command runs on macOS because it uses `lipo`, `sips`, and `ditto` to
-combine and package the two native executables:
+Release packaging and the website download layout live in the dependency-free
+`xtask` workspace package, following the
+[cargo xtask convention](https://github.com/matklad/cargo-xtask). The
+`cargo xtask` alias builds it on first use. The macOS command runs on macOS
+because it uses Apple tooling to combine, ad-hoc sign, verify, and package the
+two native executables:
 
 ```bash
-cargo run --locked --bin xtask -- package-macos \
+cargo xtask package-macos \
   --arm64-binary <aarch64-apple-darwin-executable> \
   --x86_64-binary <x86_64-apple-darwin-executable> \
   --out dist/macos-universal \
   --version <release-version>
-cargo run --locked --bin xtask -- validate-release --source dist/release
-cargo run --locked --bin xtask -- publish-downloads \
+cargo xtask validate-release --source dist/release
+cargo xtask publish-downloads \
   --source dist/release \
   --website website/public/downloads \
   --version <release-version>
@@ -143,17 +148,19 @@ The application uses an event-driven architecture:
 ### CI/CD
 
 The project uses GitHub Actions for ordinary validation and tagged releases.
-Application changes are checked with formatting, tests, and Clippy on Linux,
-then compiled natively for all five supported targets:
+Application changes are checked with workspace formatting, tests, and Clippy,
+then compiled natively on the supported systems:
 
-- **Linux:** x86-64 and ARM64
+- **Linux:** x86-64 and ARM64 on Ubuntu 22.04 and 24.04
 - **Windows:** x86-64 with the MSVC toolchain
 - **macOS:** Apple silicon and Intel
 
 Tagged releases use the repository's established unprefixed semantic version
-format, such as `0.7.0`. Both Mac executables are combined into one universal
-`Watch Bells.app`; four final files are then published to the website download
-tree and to a GitHub Release. See `.github/workflows/ci.yml` and
+format, such as `0.7.0`, and must identify a commit in `main`. Public Linux
+binaries are built on Ubuntu 22.04 for an older glibc/userspace baseline. Both
+Mac executables are combined into one verified universal `Watch Bells.app`;
+four final files are then published to the website download tree and to a
+GitHub Release. See `.github/workflows/ci.yml` and
 `.github/workflows/release.yml` for the complete configuration.
 
 ## Release History

@@ -6,6 +6,11 @@ homepage = "https://www.watchbells.com/"
 repository = "https://github.com/euan-reid/watch-bells"
 license = "MIT"
 
+[workspace]
+resolver = "3"
+members = ["xtask"]
+default-members = ["."]
+
 [dependencies]
 chrono = "0.4.44"
 image = { version = "0.25.10", default-features = false, features = ["png"] }

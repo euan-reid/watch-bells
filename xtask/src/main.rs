@@ -185,6 +185,7 @@ fn package_macos(
     )?;
     fs::remove_dir_all(&iconset_dir)?;
     write_info_plist(&contents_dir.join("Info.plist"), version)?;
+    sign_and_validate_macos_app(&app_dir, &universal_binary)?;
 
     let zip_path = out_dir.join(MACOS_UNIVERSAL_ZIP_NAME);
     if zip_path.exists() {
@@ -441,48 +442,64 @@ fn build_icns(icon: &Path, iconset_dir: &Path, output: &Path) -> Result<()> {
         )?;
     }
 
-    write_icns(iconset_dir, output)
+    run_command(
+        Command::new("iconutil")
+            .args(["-c", "icns"])
+            .arg(iconset_dir)
+            .args(["-o"])
+            .arg(output),
+        "create macOS icon",
+    )?;
+    if fs::metadata(output)?.len() == 0 {
+        return Err(boxed_err(format!(
+            "generated macOS icon is empty at {}",
+            output.display()
+        )));
+    }
+
+    let validation_iconset =
+        iconset_dir.with_file_name(format!("{APP_ICON_NAME}.validation.iconset"));
+    if validation_iconset.exists() {
+        fs::remove_dir_all(&validation_iconset)?;
+    }
+    run_command(
+        Command::new("iconutil")
+            .args(["-c", "iconset"])
+            .arg(output)
+            .args(["-o"])
+            .arg(&validation_iconset),
+        "validate macOS icon",
+    )?;
+    fs::remove_dir_all(validation_iconset)?;
+    Ok(())
 }
 
-fn write_icns(iconset_dir: &Path, output: &Path) -> Result<()> {
-    let entries = [
-        (*b"icp4", "icon_16x16.png"),
-        (*b"ic11", "icon_16x16@2x.png"),
-        (*b"icp5", "icon_32x32.png"),
-        (*b"icp6", "icon_32x32@2x.png"),
-        (*b"ic12", "icon_32x32@2x.png"),
-        (*b"ic07", "icon_128x128.png"),
-        (*b"ic13", "icon_128x128@2x.png"),
-        (*b"ic08", "icon_256x256.png"),
-        (*b"ic14", "icon_256x256@2x.png"),
-        (*b"ic09", "icon_512x512.png"),
-        (*b"ic10", "icon_512x512@2x.png"),
-    ];
-    let mut encoded_entries = Vec::with_capacity(entries.len());
-    let mut total_size = 8_u32;
-
-    for (icon_type, file_name) in entries {
-        let data = fs::read(iconset_dir.join(file_name))?;
-        if data.is_empty() {
-            return Err(boxed_err(format!("generated icon {file_name} is empty")));
-        }
-        let entry_size = u32::try_from(data.len())?
-            .checked_add(8)
-            .ok_or_else(|| boxed_err("ICNS entry size overflow"))?;
-        total_size = total_size
-            .checked_add(entry_size)
-            .ok_or_else(|| boxed_err("ICNS file size overflow"))?;
-        encoded_entries.push((icon_type, entry_size, data));
-    }
-
-    let mut file = fs::File::create(output)?;
-    file.write_all(b"icns")?;
-    file.write_all(&total_size.to_be_bytes())?;
-    for (icon_type, entry_size, data) in encoded_entries {
-        file.write_all(&icon_type)?;
-        file.write_all(&entry_size.to_be_bytes())?;
-        file.write_all(&data)?;
-    }
+fn sign_and_validate_macos_app(app_dir: &Path, executable: &Path) -> Result<()> {
+    run_command(
+        Command::new("codesign")
+            .args(["--force", "--sign", "-", "--timestamp=none"])
+            .arg(executable),
+        "ad-hoc sign universal macOS executable",
+    )?;
+    run_command(
+        Command::new("codesign")
+            .args(["--force", "--sign", "-", "--timestamp=none"])
+            .arg(app_dir),
+        "ad-hoc sign macOS application bundle",
+    )?;
+    run_command(
+        Command::new("codesign")
+            .args(["--verify", "--strict", "--verbose=2"])
+            .arg(executable),
+        "verify universal macOS executable signature",
+    )?;
+    run_command(
+        Command::new("codesign")
+            .args(["--verify", "--deep", "--strict", "--verbose=2"])
+            .arg(app_dir),
+        "verify macOS application signature",
+    )?;
+    println!("Verified ad-hoc signature for {}", app_dir.display());
     Ok(())
 }
 
@@ -580,11 +597,11 @@ fn run_command_output(command: &mut Command, label: &str) -> Result<Output> {
 
 fn print_help() {
     eprintln!("Usage:");
-    eprintln!("  cargo run --bin xtask -- package-macos");
+    eprintln!("  cargo xtask package-macos");
     eprintln!("    --arm64-binary <path> --x86_64-binary <path>");
     eprintln!("    --out <dir> --version <v> [--icon <path>]");
-    eprintln!("  cargo run --bin xtask -- validate-release --source <dir>");
-    eprintln!("  cargo run --bin xtask -- publish-downloads");
+    eprintln!("  cargo xtask validate-release --source <dir>");
+    eprintln!("  cargo xtask publish-downloads");
     eprintln!("    --source <dir> --website <dir> --version <v>");
 }
 
@@ -761,46 +778,5 @@ mod tests {
         assert!(plist.contains("<string>0.7.0</string>"));
         assert!(plist.contains("<key>arm64</key>\n      <string>11.0.0</string>"));
         assert!(plist.contains("<key>x86_64</key>\n      <string>10.13.0</string>"));
-    }
-
-    #[test]
-    fn icns_writer_emits_a_complete_big_endian_container() {
-        let temporary = TempDirectory::new();
-        let iconset_dir = temporary.path().join("WatchBells.iconset");
-        let output = temporary.path().join("WatchBells.icns");
-        fs::create_dir(&iconset_dir).expect("create iconset");
-        for file_name in [
-            "icon_16x16.png",
-            "icon_16x16@2x.png",
-            "icon_32x32.png",
-            "icon_32x32@2x.png",
-            "icon_128x128.png",
-            "icon_128x128@2x.png",
-            "icon_256x256.png",
-            "icon_256x256@2x.png",
-            "icon_512x512.png",
-            "icon_512x512@2x.png",
-        ] {
-            fs::write(iconset_dir.join(file_name), file_name).expect("write test icon");
-        }
-
-        write_icns(&iconset_dir, &output).expect("write ICNS container");
-        let icns = fs::read(output).expect("read ICNS container");
-
-        assert_eq!(&icns[0..4], b"icns");
-        assert_eq!(
-            u32::from_be_bytes(icns[4..8].try_into().expect("read ICNS size")) as usize,
-            icns.len()
-        );
-        for icon_type in [
-            b"icp4", b"ic11", b"icp5", b"icp6", b"ic12", b"ic07", b"ic13", b"ic08", b"ic14",
-            b"ic09", b"ic10",
-        ] {
-            assert!(
-                icns.windows(4).any(|window| window == icon_type),
-                "missing {} entry",
-                String::from_utf8_lossy(icon_type)
-            );
-        }
     }
 }
