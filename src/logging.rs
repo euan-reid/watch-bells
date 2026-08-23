@@ -211,7 +211,7 @@ fn environment_path(name: &str) -> Option<PathBuf> {
     env::var_os(name)
         .filter(|path| !path.is_empty())
         .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
+        .filter(|path| usable_base_path(Some(path)).is_some())
 }
 
 fn log_directory() -> Option<PathBuf> {
@@ -233,10 +233,6 @@ fn log_directory_for(
     local_app_data: Option<&Path>,
     xdg_state_home: Option<&Path>,
 ) -> Option<PathBuf> {
-    let home = usable_base_path(home);
-    let local_app_data = usable_base_path(local_app_data);
-    let xdg_state_home = usable_base_path(xdg_state_home);
-
     match platform {
         Platform::Macos => home.map(|home| home.join("Library").join("Logs").join(APP_NAME)),
         Platform::Windows => local_app_data.map(|path| path.join(APP_NAME)),
@@ -296,7 +292,7 @@ mod tests {
     use super::{
         APP_NAME, LINUX_APP_NAME, LOG_FILE_NAME, Level, LevelFilter, MAX_LOG_SIZE, Platform,
         format_log_line_at, level_enabled, log_directory_for, needs_rotation, open_log_file_at,
-        rotate_log_if_needed,
+        rotate_log_if_needed, usable_base_path,
     };
 
     fn test_directory() -> PathBuf {
@@ -338,20 +334,9 @@ mod tests {
     fn log_directory_rejects_unusable_environment_paths() {
         let relative = Path::new("relative");
         let empty = Path::new("");
-        let home = Path::new("/home/tester");
 
-        assert_eq!(
-            log_directory_for(Platform::Macos, Some(relative), None, None),
-            None
-        );
-        assert_eq!(
-            log_directory_for(Platform::Windows, None, Some(empty), None),
-            None
-        );
-        assert_eq!(
-            log_directory_for(Platform::Linux, Some(home), None, Some(relative)),
-            Some(home.join(".local").join("state").join(LINUX_APP_NAME))
-        );
+        assert!(usable_base_path(Some(relative)).is_none());
+        assert!(usable_base_path(Some(empty)).is_none());
     }
 
     #[test]
