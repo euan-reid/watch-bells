@@ -79,7 +79,7 @@ jobs:
             pkg-config
 
       - name: Check formatting
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: Run workspace tests
         run: cargo test --workspace --locked
@@ -441,10 +441,13 @@ jobs:
             exit 1
           fi
 
-      - name: Check out current main branch
+      - name: Create current main worktree
         run: |
-          git fetch origin main
-          git checkout -B main FETCH_HEAD
+          set -euo pipefail
+          # Keep the tagged checkout intact so every cargo xtask invocation uses
+          # release logic from the tag, while website changes use current main.
+          git fetch --no-tags origin +main:refs/remotes/origin/main
+          git worktree add --detach "$RUNNER_TEMP/watch-bells-main" origin/main
 
       - name: Verify website copy for an already-published release
         if: steps.release-state.outputs.state == 'published'
@@ -452,7 +455,7 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           cargo xtask validate-release \
-            --source "website/public/downloads/$VERSION"
+            --source "$RUNNER_TEMP/watch-bells-main/website/public/downloads/$VERSION"
           echo "Release $VERSION is already complete; no publication changes are needed."
 
       - name: Populate versioned and latest website downloads
@@ -462,7 +465,7 @@ jobs:
         run: |
           cargo xtask publish-downloads \
             --source dist/release \
-            --website website/public/downloads \
+            --website "$RUNNER_TEMP/watch-bells-main/website/public/downloads" \
             --version "$VERSION"
 
       - name: Commit and push generated website downloads
@@ -471,10 +474,11 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email \
+          main_checkout="$RUNNER_TEMP/watch-bells-main"
+          git -C "$main_checkout" config user.name "github-actions[bot]"
+          git -C "$main_checkout" config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
-          git add --all -- \
+          git -C "$main_checkout" add --all -- \
             "website/public/downloads/$VERSION" \
             website/public/downloads/latest
 
@@ -488,14 +492,15 @@ jobs:
                 exit 1
                 ;;
             esac
-          done < <(git diff --cached --name-only)
+          done < <(git -C "$main_checkout" diff --cached --name-only)
 
-          if git diff --cached --quiet; then
+          if git -C "$main_checkout" diff --cached --quiet; then
             echo "Website downloads already contain release $VERSION."
           else
-            git commit -m "chore(downloads): publish $VERSION binaries"
+            git -C "$main_checkout" commit \
+              -m "chore(downloads): publish $VERSION binaries"
             # GITHUB_TOKEN pushes do not recursively start another Actions run.
-            git push origin HEAD:main
+            git -C "$main_checkout" push origin HEAD:main
           fi
 
       - name: Publish GitHub Release

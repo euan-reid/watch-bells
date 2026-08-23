@@ -31,22 +31,23 @@ The same current release files are also available from
 **Linux:**
 
 - Native downloads are available for x86-64 Intel/AMD and ARM64 systems
-- Requires pkg-config, GTK3, XCB, XKBCommon, and ALSA dev headers
-- Debian/Ubuntu:
+- Downloads are dynamically linked and require the GTK 3, XCB, XKBCommon,
+  ALSA, and xdo runtime libraries
+- To build from source on Debian/Ubuntu, install:
 
   ```bash
   sudo apt install pkg-config libgtk-3-dev libxcb1-dev libxkbcommon-dev \
     libasound2-dev libxdo-dev
   ```
 
-- Fedora/RHEL:
+- To build from source on Fedora/RHEL, install:
 
   ```bash
   sudo dnf install pkg-config gtk3-devel libxcb-devel libxkbcommon-devel \
     alsa-lib-devel libxdo-dev
   ```
 
-- PipeWire users: alsa-lib dev headers are still needed for audio output
+- PipeWire users building from source still need the ALSA development headers
 
 **Windows:**
 
@@ -65,8 +66,8 @@ Watch Bells is written in Rust for performance and cross-platform compatibility.
 - [rustup](https://rustup.rs/); the checked-in toolchain file selects stable
   Rust with the formatting and Clippy components
 - Git
-- Linux only: `libxcb1-dev`, `libxkbcommon-dev`, `libasound2-dev`
-  (see Platform-Specific Notes above)
+- Linux only: `pkg-config` and the GTK 3, XCB, XKBCommon, ALSA, and xdo
+  development packages listed above
 
 ### Building
 

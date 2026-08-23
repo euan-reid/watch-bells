@@ -91,7 +91,7 @@ jobs:
             pkg-config
 
       - name: Check formatting
-        run: cargo fmt --check
+        run: cargo fmt --all --check
 
       - name: Run workspace tests
         run: cargo test --workspace --locked

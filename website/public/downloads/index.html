@@ -99,7 +99,7 @@
                         <div class="platform-code" aria-hidden="true">LNX</div>
                         <div class="platform-copy">
                             <h3>Linux</h3>
-                            <p>64-bit Intel/AMD · Standalone binary</p>
+                            <p>64-bit Intel/AMD · Dynamically linked native binary</p>
                         </div>
                         <a
                             class="download-link"
@@ -114,7 +114,7 @@
                         <div class="platform-code" aria-hidden="true">ARM</div>
                         <div class="platform-copy">
                             <h3>Linux</h3>
-                            <p>ARM64 · Standalone binary</p>
+                            <p>ARM64 · Dynamically linked native binary</p>
                         </div>
                         <a
                             class="download-link"
@@ -133,7 +133,9 @@
                         Applications. The same Mac download works on Apple silicon
                         and Intel. Windows can run the downloaded executable directly.
                         On Linux, mark the downloaded binary as executable before
-                        running it with <code>chmod +x watch-bells-linux-*</code>.
+                        running it with <code>chmod +x watch-bells-linux-*</code>;
+                        the usual GTK 3, XCB, XKBCommon, ALSA, and xdo runtime
+                        libraries must be installed.
                     </p>
                 </div>
             </section>
