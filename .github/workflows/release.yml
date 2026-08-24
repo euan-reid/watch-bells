@@ -323,6 +323,7 @@ jobs:
       - build
       - package-macos
     runs-on: ubuntu-24.04
+    environment: release
     permissions:
       contents: write
     steps:
@@ -330,6 +331,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Download Linux x86-64 artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -468,16 +470,24 @@ jobs:
             --website "$RUNNER_TEMP/watch-bells-main/website/public/downloads" \
             --version "$VERSION"
 
-      - name: Commit and push generated website downloads
+      - name: Create release publication token
+        if: steps.release-state.outputs.state != 'published'
+        id: release-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Publish generated website downloads to main
         if: steps.release-state.outputs.state != 'published'
         env:
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
+
           main_checkout="$RUNNER_TEMP/watch-bells-main"
-          git -C "$main_checkout" config user.name "github-actions[bot]"
-          git -C "$main_checkout" config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
           git -C "$main_checkout" add --all -- \
             "website/public/downloads/$VERSION" \
             website/public/downloads/latest
@@ -488,7 +498,7 @@ jobs:
                 website/public/downloads/latest/*)
                 ;;
               *)
-                echo "Refusing to commit unexpected path: $staged_path" >&2
+                echo "Refusing to publish unexpected path: $staged_path" >&2
                 exit 1
                 ;;
             esac
@@ -496,12 +506,170 @@ jobs:
 
           if git -C "$main_checkout" diff --cached --quiet; then
             echo "Website downloads already contain release $VERSION."
-          else
-            git -C "$main_checkout" commit \
-              -m "chore(downloads): publish $VERSION binaries"
-            # GITHUB_TOKEN pushes do not recursively start another Actions run.
-            git -C "$main_checkout" push origin HEAD:main
+            exit 0
           fi
+
+          # Ensure main has not moved since the publication worktree was created.
+          parent_sha="$(git -C "$main_checkout" rev-parse HEAD)"
+          remote_sha="$(
+            gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+              --jq '.object.sha'
+          )"
+
+          if [[ "$remote_sha" != "$parent_sha" ]]; then
+            echo "main advanced during release publication." >&2
+            echo "Expected $parent_sha; found $remote_sha." >&2
+            echo "Refusing to publish against stale main." >&2
+            exit 1
+          fi
+
+          parent_tree="$(
+            gh api "repos/$GITHUB_REPOSITORY/git/commits/$parent_sha" \
+              --jq '.tree.sha'
+          )"
+
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+
+          tree_entries="$temp_dir/tree-entries.json"
+          printf '[]\n' > "$tree_entries"
+
+          # Convert each staged addition/modification into a GitHub blob,
+          # preserving the Git mode from the generated worktree.
+          while IFS=$'\t' read -r status path; do
+            case "$status" in
+              A|M)
+                mode="$(
+                  git -C "$main_checkout" ls-files --stage -- "$path" |
+                    awk '{print $1}'
+                )"
+
+                encoded="$temp_dir/content.b64"
+                base64 --wrap=0 "$main_checkout/$path" > "$encoded"
+
+                blob_payload="$temp_dir/blob.json"
+                jq -n \
+                  --rawfile content "$encoded" \
+                  '{content: $content, encoding: "base64"}' \
+                  > "$blob_payload"
+
+                blob_sha="$(
+                  gh api \
+                    --method POST \
+                    "repos/$GITHUB_REPOSITORY/git/blobs" \
+                    --input "$blob_payload" \
+                    --jq '.sha'
+                )"
+
+                jq \
+                  --arg path "$path" \
+                  --arg mode "$mode" \
+                  --arg sha "$blob_sha" \
+                  '. + [{
+                    path: $path,
+                    mode: $mode,
+                    type: "blob",
+                    sha: $sha
+                  }]' \
+                  "$tree_entries" > "$tree_entries.new"
+
+                mv "$tree_entries.new" "$tree_entries"
+                ;;
+
+              D)
+                mode="$(
+                  git -C "$main_checkout" ls-tree "$parent_sha" -- "$path" |
+                    awk '{print $1}'
+                )"
+
+                jq \
+                  --arg path "$path" \
+                  --arg mode "$mode" \
+                  '. + [{
+                    path: $path,
+                    mode: $mode,
+                    type: "blob",
+                    sha: null
+                  }]' \
+                  "$tree_entries" > "$tree_entries.new"
+
+                mv "$tree_entries.new" "$tree_entries"
+                ;;
+
+              *)
+                echo "Unsupported generated change '$status' for '$path'." >&2
+                exit 1
+                ;;
+            esac
+          done < <(
+            git -C "$main_checkout" \
+              diff --cached --name-status --no-renames
+          )
+
+          tree_payload="$temp_dir/tree.json"
+          jq -n \
+            --arg base_tree "$parent_tree" \
+            --slurpfile entries "$tree_entries" \
+            '{
+              base_tree: $base_tree,
+              tree: $entries[0]
+            }' \
+            > "$tree_payload"
+
+          new_tree="$(
+            gh api \
+              --method POST \
+              "repos/$GITHUB_REPOSITORY/git/trees" \
+              --input "$tree_payload" \
+              --jq '.sha'
+          )"
+
+          commit_payload="$temp_dir/commit.json"
+          jq -n \
+            --arg message "chore(downloads): publish $VERSION binaries" \
+            --arg tree "$new_tree" \
+            --arg parent "$parent_sha" \
+            '{
+              message: $message,
+              tree: $tree,
+              parents: [$parent]
+            }' \
+            > "$commit_payload"
+
+          # Deliberately omit author, committer, and signature.
+          # GitHub therefore creates and signs this as the authenticated App.
+          commit_response="$temp_dir/commit-response.json"
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/git/commits" \
+            --input "$commit_payload" \
+            > "$commit_response"
+
+          commit_sha="$(jq -r '.sha' "$commit_response")"
+          verified="$(jq -r '.verification.verified' "$commit_response")"
+          verification_reason="$(jq -r '.verification.reason' "$commit_response")"
+
+          if [[ "$verified" != "true" ]]; then
+            echo "GitHub did not verify the generated release commit." >&2
+            echo "Verification reason: $verification_reason" >&2
+            exit 1
+          fi
+
+          echo "Created verified release commit $commit_sha."
+
+          ref_payload="$temp_dir/ref.json"
+          jq -n \
+            --arg sha "$commit_sha" \
+            '{sha: $sha, force: false}' \
+            > "$ref_payload"
+
+          gh api \
+            --method PATCH \
+            "repos/$GITHUB_REPOSITORY/git/refs/heads/main" \
+            --input "$ref_payload" \
+            >/dev/null
+
+          echo "Published verified release commit $commit_sha to main."
 
       - name: Publish GitHub Release
         if: steps.release-state.outputs.state != 'published'
