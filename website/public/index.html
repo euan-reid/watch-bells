@@ -6,7 +6,7 @@
         <title>Watch Bells — Traditional ship's bells for your computer</title>
         <meta
             name="description"
-            content="Watch Bells brings the traditional naval watch and ship's bell system to macOS, Windows, and Linux. Native, precise, offline, and open source."
+            content="Ship's bells every half hour on your Mac, Windows, or Linux computer. Watch Bells runs in your menu bar or system tray and works offline."
 >
         <link rel="canonical" href="https://www.watchbells.com/">
         <link rel="icon" href="/bell-mark.svg" type="image/svg+xml">
@@ -71,7 +71,7 @@
             <main id="main-content">
                 <section class="hero frame" aria-labelledby="hero-title">
                     <div class="live-instrument" role="status" aria-live="polite">
-                        <span class="live-label" aria-hidden="true">Local signal</span>
+                        <span class="live-label" aria-hidden="true">Your local time</span>
                         <span id="live-bells">
                             Traditional ship's bells, every half hour
                         </span>
@@ -79,19 +79,18 @@
 
                     <div class="hero-layout">
                         <div class="hero-copy">
-                            <p class="eyebrow">Naval timekeeping · Desktop utility</p>
                             <h1 id="hero-title">Watch Bells</h1>
                             <p class="hero-tagline">Traditional ship's bells for your computer.</p>
                             <div class="hero-introduction">
                                 <p>
-                                    A ship's bell divides each four-hour watch into
-                                    half-hours. One bell sounds after the first half-hour,
-                                    two after the first hour, and so on until eight bells
-                                    marks the watch's end.
+                                    Watch Bells rings ship's bells every half hour on
+                                    your Mac, Windows, or Linux computer. It sits in
+                                    your menu bar or system tray, where you can mute
+                                    it whenever you need some quiet.
                                 </p>
                                 <p>
-                                    Watch Bells brings that traditional rhythm to your
-                                    Mac, Windows, or Linux computer.
+                                    The number of bells tells you how far through
+                                    the watch you are.
                                 </p>
                             </div>
                             <div class="actions">
@@ -109,8 +108,7 @@
 
                         <figure class="bell-plate">
                             <div class="plate-heading">
-                                <span>Time signal</span>
-                                <span>WB · 08</span>
+                                <span>Ship's bells</span>
                             </div>
                             <img
                                 class="hero-bell"
@@ -124,7 +122,16 @@
                                 <strong role="img" aria-label="Eight bells">
                                     <span aria-hidden="true">••&nbsp; ••&nbsp; ••&nbsp; ••</span>
                                 </strong>
-                                <span>Eight bells · watch relieved</span>
+                                <span>Eight bells · end of the watch</span>
+                                <div class="bell-preview">
+                                    <p id="preview-label">Hear eight bells</p>
+                                    <!-- Four consecutive copies of assets/chime_twice.wav. -->
+                                    <audio controls preload="none" aria-labelledby="preview-label"
+                                        src="/audio/eight-bells.wav">
+                                        <a href="/audio/eight-bells.wav">Listen to eight bells</a>
+                                    </audio>
+                                    <p>The same recording used in the app.</p>
+                                </div>
                             </figcaption>
                         </figure>
                     </div>
@@ -132,16 +139,67 @@
             </main>
         </div>
 
+        <section class="software-section" id="software" aria-labelledby="software-heading">
+            <div class="frame section-grid">
+                <header class="section-heading">
+                    <h2 id="software-heading">Using Watch Bells</h2>
+                    <p>
+                        Open the app and look for the bell icon in your menu bar
+                        or system tray. Hover over it to see the current watch
+                        and bell count, or open its menu to mute the bells or quit.
+                    </p>
+                </header>
+
+                <div class="software-specification">
+                    <div class="spec-row">
+                        <span>Sound</span>
+                        <strong>Mute when you need to</strong>
+                        <p>Select Mute in the bell menu. Select it again to turn the sound back on.</p>
+                    </div>
+                    <div class="spec-row">
+                        <span>Startup</span>
+                        <strong>Start with your computer</strong>
+                        <p>Add Watch Bells to your startup apps. See the <a href="/downloads/#installation">installation notes</a>.</p>
+                    </div>
+                    <div class="spec-row">
+                        <span>Connection</span>
+                        <strong>Works offline</strong>
+                        <p>The bell recordings are included in the download.</p>
+                    </div>
+                    <div class="spec-row">
+                        <span>Source code</span>
+                        <strong>Open source</strong>
+                        <p>Written in Rust and available under the <a href="https://github.com/euan-reid/watch-bells/blob/main/LICENSE">MIT licence</a>.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <aside class="provenance" aria-labelledby="provenance-heading">
+            <div class="frame provenance-layout">
+                <span class="provenance-mark" aria-hidden="true"></span>
+                <div>
+                    <h2 id="provenance-heading">About the project</h2>
+                    <p>
+                        I'm Euan Reid. I like nautical things, and thought it could
+                        be fun to have my computer ring ship's bells. So I made this.
+                        <a href="https://www.euanreid.com/projects/watch-bells/">
+                            Read my notes on ship's bells and the app <span aria-hidden="true">→</span>
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </aside>
+
         <section class="document-section" id="tradition" aria-labelledby="bells-heading">
             <div class="frame section-grid">
                 <header class="section-heading">
-                    <p class="section-index">Signal book · 01</p>
                     <h2 id="bells-heading">How ship's bells tell time</h2>
                     <p>
-                        The count records elapsed half-hours within a watch - not the
-                        hour shown on a civil clock. Strikes come in pairs so they
-                        can be counted easily, with a final single strike for odd
-                        numbers. After eight bells, the next half-hour returns to one.
+                        One bell marks the first half-hour of a four-hour watch,
+                        two bells the first hour, and so on up to eight.
+                        The bells sound in pairs to make them easier to count,
+                        with a single strike at the end for odd numbers.
                     </p>
                 </header>
 
@@ -202,13 +260,12 @@
         <section class="watches-section" aria-labelledby="watches-heading">
             <div class="frame">
                 <header class="section-heading section-heading-wide">
-                    <p class="section-index">Watch bill · 02</p>
                     <h2 id="watches-heading">The seven watches</h2>
                     <p>
-                        Five watches occupy four hours apiece. The evening period
-                        is divided into two shorter dog watches, producing an odd
-                        number of duties so the same people need not stand the same
-                        watch every day.
+                        Five watches last four hours each. Two shorter dog watches
+                        split the early evening. That gives an odd number of
+                        watches, so crews taking turns need not work the same
+                        hours every day.
                     </p>
                 </header>
 
@@ -291,8 +348,7 @@
         <section class="exception-section" aria-labelledby="exception-heading">
             <div class="frame exception-grid">
                 <header>
-                    <p class="section-index section-index-light">Special order · 1797</p>
-                    <h2 id="exception-heading">Except, of course, when they don't.</h2>
+                    <h2 id="exception-heading">The dog watches</h2>
                 </header>
                 <div class="exception-copy">
                     <p>
@@ -300,10 +356,10 @@
                         progression. In the Last Dog Watch, Watch Bells also follows
                         the British convention associated with the Nore mutiny of
                         1797: five bells at 18:30 are omitted, the reputed signal for
-                        the mutiny to commence.
+                        the mutiny to begin.
                     </p>
                     <p>
-                        The result is the peculiar sequence below. At 18:30 the
+                        You can see the sequence below. At 18:30 the
                         count returns to one; at 20:00, eight bells still marks the
                         change to the First Watch.
                     </p>
@@ -348,71 +404,17 @@
             </div>
         </section>
 
-        <section class="software-section" id="software" aria-labelledby="software-heading">
-            <div class="frame section-grid">
-                <header class="section-heading">
-                    <p class="section-index">Engine room · 03</p>
-                    <h2 id="software-heading">Old convention. Modern machinery.</h2>
-                    <p>
-                        Watch Bells is a small native Rust application. It waits in
-                        your menu bar or system tray, sounds the correct sequence at
-                        each half-hour boundary, and otherwise stays out of the way.
-                    </p>
-                </header>
-
-                <div class="software-specification">
-                    <div class="spec-row">
-                        <span>Construction</span>
-                        <strong>Native Rust application</strong>
-                        <p>No Electron bloat or separate runtime.</p>
-                    </div>
-                    <div class="spec-row">
-                        <span>Stations</span>
-                        <strong>macOS · Windows · Linux</strong>
-                        <p>Works across all platforms.</p>
-                    </div>
-                    <div class="spec-row">
-                        <span>Operation</span>
-                        <strong>Offline and unobtrusive</strong>
-                        <p>Mute controls and no network dependency.</p>
-                    </div>
-                    <div class="spec-row">
-                        <span>Inspection</span>
-                        <strong>Open source</strong>
-                        <p>MIT licensed.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <section class="download-section" aria-labelledby="download-heading">
             <div class="frame download-layout">
                 <div>
-                    <p class="section-index section-index-light">Ready for service</p>
-                    <h2 id="download-heading">Put your computer on ship's time.</h2>
-                    <p>Current builds are available for macOS, Windows, and Linux.</p>
+                    <h2 id="download-heading">Download Watch Bells</h2>
+                    <p>Available for macOS, Windows, and Linux.</p>
                 </div>
                 <a class="action action-brass" href="/downloads/">
                     Choose your download
                 </a>
             </div>
         </section>
-
-        <aside class="provenance" aria-labelledby="provenance-heading">
-            <div class="frame provenance-layout">
-                <span class="provenance-mark" aria-hidden="true"></span>
-                <div>
-                    <p class="section-index">Provenance</p>
-                    <h2 id="provenance-heading">The story behind Watch Bells</h2>
-                    <p>
-                        Watch Bells began as a small personal project by Euan Reid.
-                        <a href="https://www.euanreid.com/projects/watch-bells/">
-                            Read the original project write-up <span aria-hidden="true">→</span>
-                        </a>
-                    </p>
-                </div>
-            </div>
-        </aside>
 
         <footer class="site-footer">
             <div class="frame footer-layout">

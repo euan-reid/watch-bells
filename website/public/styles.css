@@ -337,6 +337,33 @@ a:hover {
     letter-spacing: 0.1em;
 }
 
+.bell-preview {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule-dark);
+    text-align: center;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.bell-preview p {
+    margin: 0 0 0.75rem;
+    color: var(--ivory);
+    font-size: 0.85rem;
+}
+
+.bell-preview audio {
+    display: block;
+    width: 100%;
+    color-scheme: dark;
+}
+
+.bell-preview p:last-child {
+    margin: 0.75rem 0 0;
+    color: #aeb9bd;
+    font-size: 0.75rem;
+}
+
 .document-section,
 .software-section {
     padding-block: clamp(5rem, 9vw, 8.5rem);
@@ -734,7 +761,7 @@ a:hover {
 
 .spec-row {
     display: grid;
-    grid-template-columns: 7.5rem minmax(9rem, 0.85fr) minmax(12rem, 1.15fr);
+    grid-template-columns: 6rem minmax(0, 0.85fr) minmax(0, 1.15fr);
     gap: 1.5rem;
     align-items: baseline;
     padding-block: 1.35rem;
@@ -953,6 +980,27 @@ a:hover {
 .installation-note p {
     margin: 0;
     color: var(--ink-soft);
+}
+
+.installation-platforms {
+    display: grid;
+    gap: 2rem;
+    min-width: 0;
+}
+
+.installation-platforms h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+}
+
+.installation-platforms p + p {
+    margin-top: 0.75rem;
+}
+
+.installation-platforms pre {
+    padding: 0.75rem;
+    overflow-x: auto;
+    background: var(--paper-deep);
 }
 
 code {
