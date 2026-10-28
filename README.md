@@ -189,6 +189,8 @@ GitHub Release. See `.github/workflows/ci.yml` and
 
 ## Release History
 
+- 0.7.1
+  - Update dependencies to remove security advisories
 - 0.7.0
   - Add persistent logging
 - 0.6.0
