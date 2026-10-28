@@ -17,9 +17,11 @@ use image::ImageFormat::Png as PngFormat;
 use log::{debug, error, info, warn};
 use rodio::{Decoder, DeviceSinkBuilder, Player};
 use rust_embed::RustEmbed;
+#[cfg(not(target_os = "linux"))]
+use tray_icon::menu::AboutMetadata;
 use tray_icon::{
     Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
-    menu::{AboutMetadata, CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
 };
 use winit::{
     application::ApplicationHandler,
@@ -372,15 +374,25 @@ impl App {
         let status_i = MenuItem::new(current_state.tooltip(), false, None);
         let mute_i = CheckMenuItem::new("Mute", true, false, None);
         let quit_i = MenuItem::new("Quit", true, None);
+        #[cfg(not(target_os = "linux"))]
+        let about_i = PredefinedMenuItem::about(
+            None,
+            Some(AboutMetadata {
+                name: Some("Watch Bells".to_string()),
+                version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                ..Default::default()
+            }),
+        );
+        // The D-Bus backend has no native About dialogue. Keep the version
+        // visible in the menu without offering an action that cannot run.
+        #[cfg(target_os = "linux")]
+        let about_i = MenuItem::new(
+            concat!("Watch Bells ", env!("CARGO_PKG_VERSION")),
+            false,
+            None,
+        );
         let tray_menu = Menu::with_items(&[
-            &PredefinedMenuItem::about(
-                None,
-                Some(AboutMetadata {
-                    name: Some("Watch Bells".to_string()),
-                    version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                    ..Default::default()
-                }),
-            ),
+            &about_i,
             &PredefinedMenuItem::separator(),
             &status_i,
             &PredefinedMenuItem::separator(),

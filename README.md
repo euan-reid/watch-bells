@@ -30,20 +30,22 @@ The same current release files are also available from
 **Linux:**
 
 - Native downloads are available for x86-64 Intel/AMD and ARM64 systems
-- Downloads are dynamically linked and require the GTK 3, XCB, XKBCommon,
+- Published 0.7.0 downloads are dynamically linked and require the GTK 3, XCB, XKBCommon,
   ALSA, and xdo runtime libraries
+- Builds from current source use a D-Bus StatusNotifierItem tray, without GTK 3
+  or xdo. A desktop session with a StatusNotifierItem host is required; GNOME
+  users need an AppIndicator/KStatusNotifierItem extension. The application
+  version appears directly in the tray menu in place of an About dialogue.
 - To build from source on Debian/Ubuntu, install:
 
   ```bash
-  sudo apt install pkg-config libgtk-3-dev libxcb1-dev libxkbcommon-dev \
-    libasound2-dev libxdo-dev
+  sudo apt install pkg-config libxcb1-dev libxkbcommon-dev libasound2-dev
   ```
 
 - To build from source on Fedora/RHEL, install:
 
   ```bash
-  sudo dnf install pkg-config gtk3-devel libxcb-devel libxkbcommon-devel \
-    alsa-lib-devel libxdo-dev
+  sudo dnf install pkg-config libxcb-devel libxkbcommon-devel alsa-lib-devel
   ```
 
 - PipeWire users building from source still need the ALSA development headers
@@ -86,7 +88,7 @@ Watch Bells is written in Rust for performance and cross-platform compatibility.
 - [rustup](https://rustup.rs/); the checked-in toolchain file selects stable
   Rust with the formatting and Clippy components
 - Git
-- Linux only: `pkg-config` and the GTK 3, XCB, XKBCommon, ALSA, and xdo
+- Linux only: `pkg-config` and the XCB, XKBCommon, and ALSA
   development packages listed above
 
 ### Building
@@ -187,6 +189,8 @@ GitHub Release. See `.github/workflows/ci.yml` and
 
 ## Release History
 
+- 0.7.1
+  - Update dependencies to remove security advisories
 - 0.7.0
   - Add persistent logging
 - 0.6.0
