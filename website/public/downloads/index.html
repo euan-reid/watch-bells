@@ -45,10 +45,9 @@
             </header>
 
             <div class="frame page-title">
-                <p class="eyebrow">Stores division · Current issue</p>
                 <h1>Downloads</h1>
                 <p>
-                    Select the native build for your computer.
+                    Choose the download for your computer.
                 </p>
             </div>
         </div>
@@ -56,8 +55,7 @@
         <main id="main-content" class="downloads-main">
             <section class="frame" aria-labelledby="current-builds-heading">
                 <header class="section-heading section-heading-wide downloads-heading">
-                    <p class="section-index">Issue table · 01</p>
-                    <h2 id="current-builds-heading">Current builds</h2>
+                    <h2 id="current-builds-heading">Latest version</h2>
                     <p>
                         Watch Bells runs locally and does not need a network
                         connection after download.
@@ -99,7 +97,7 @@
                         <div class="platform-code" aria-hidden="true">LNX</div>
                         <div class="platform-copy">
                             <h3>Linux</h3>
-                            <p>64-bit Intel/AMD · Dynamically linked native binary</p>
+                            <p>64-bit Intel/AMD · <a href="#linux-installation">Linux requirements</a></p>
                         </div>
                         <a
                             class="download-link"
@@ -114,7 +112,7 @@
                         <div class="platform-code" aria-hidden="true">ARM</div>
                         <div class="platform-copy">
                             <h3>Linux</h3>
-                            <p>ARM64 · Dynamically linked native binary</p>
+                            <p>ARM64 · <a href="#linux-installation">Linux requirements</a></p>
                         </div>
                         <a
                             class="download-link"
@@ -126,31 +124,70 @@
                     </article>
                 </div>
 
-                <div class="installation-note">
+                <div class="installation-note" id="installation">
                     <h2>Installation notes</h2>
-                    <p>
-                        Unzip the macOS download and move Watch Bells to
-                        Applications. The same Mac download works on Apple silicon
-                        and Intel. Windows can run the downloaded executable directly.
-                        On Linux, mark the downloaded binary as executable before
-                        running it with <code>chmod +x watch-bells-linux-*</code>;
-                        the usual GTK 3, XCB, XKBCommon, ALSA, and xdo runtime
-                        libraries must be installed.
-                    </p>
+                    <div class="installation-platforms">
+                        <section aria-labelledby="macos-installation">
+                            <h3 id="macos-installation">macOS</h3>
+                            <p>
+                                Unzip the download, move Watch Bells to Applications,
+                                and open it. Look for the bell in your menu bar;
+                                there is no Dock icon. The same download works on
+                                Apple silicon and Intel Macs.
+                            </p>
+                            <p>
+                                To start it automatically, add Watch Bells to Login
+                                Items in System Settings.
+                            </p>
+                        </section>
+                        <section aria-labelledby="windows-installation">
+                            <h3 id="windows-installation">Windows</h3>
+                            <p>
+                                Keep the downloaded executable somewhere permanent
+                                and double-click it to run. Look for the bell in
+                                your system tray.
+                            </p>
+                            <p>
+                                To start it automatically, press Windows + R,
+                                enter <code>shell:startup</code>, and place a
+                                shortcut to Watch Bells in that folder.
+                            </p>
+                        </section>
+                        <section aria-labelledby="linux-installation">
+                            <h3 id="linux-installation">Linux</h3>
+                            <p>
+                                Choose the download that matches your processor.
+                                In a terminal, open the folder containing the
+                                download and make the file executable:
+                            </p>
+                            <pre><code>chmod +x watch-bells-linux-x86_64</code></pre>
+                            <p>
+                                For ARM64, use <code>watch-bells-linux-aarch64</code>
+                                instead. Run the file to start Watch Bells.
+                            </p>
+                            <p>
+                                The app needs the GTK 3, XCB, XKBCommon, ALSA, and
+                                xdo runtime libraries. Install any missing libraries
+                                through your distribution's package manager.
+                            </p>
+                            <p>
+                                To start it automatically, add the executable to
+                                your desktop environment's startup applications.
+                            </p>
+                        </section>
+                    </div>
                 </div>
             </section>
 
             <section class="release-history" aria-labelledby="history-heading">
                 <div class="frame release-layout">
                     <div>
-                        <p class="section-index section-index-light">Archive · 02</p>
-                        <h2 id="history-heading">Need an older issue?</h2>
+                        <h2 id="history-heading">Older versions</h2>
                     </div>
                     <p>
-                        Previous versions and their release notes remain available
-                        in the project archive.
+                        Previous versions and release notes are on GitHub.
                         <a href="https://github.com/euan-reid/watch-bells/releases">
-                            Visit the release history <span aria-hidden="true">→</span>
+                            View previous releases <span aria-hidden="true">→</span>
                         </a>
                     </p>
                 </div>
@@ -158,7 +195,7 @@
 
             <nav class="frame return-navigation" aria-label="Related pages">
                 <a href="/"><span aria-hidden="true">←</span> Return to Watch Bells</a>
-                <a href="https://github.com/euan-reid/watch-bells">Inspect the source code</a>
+                <a href="https://github.com/euan-reid/watch-bells">View source code</a>
             </nav>
         </main>
 
